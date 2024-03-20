@@ -11,8 +11,6 @@ import PySimpleGUI as sg
 from symspellpy import SymSpell, Verbosity
 
 sym_spell = SymSpell()
-# dictionary_path = "C:\\Users\\GIANG\\Downloads\\Simple-ocr-hardsubs-main\\merge.txt"
-# sym_spell.load_dictionary(dictionary_path, 0, 1, encoding = "utf8")
 
 dictionary_path = join("dictionaries", "vi_full.txt")
 sym_spell.load_dictionary(dictionary_path, 0, 1, encoding="utf8")
@@ -52,21 +50,6 @@ def get_para_from_recent(default = False):
 	return parameter
 parameter = get_para_from_recent()
 
-# parameter[
-#     "origin_sub_path"] = ("C:\\Users\\GIANG\\Downloads\\Simple-ocr-hardsubs-main\\[MTBB] The Dangers in My Heart S2 - "
-#                           "07 (WEB 1080p) [83A9681F]_Track03.ass")
-# parameter[
-#     "ocr_sub_path"] = ("C:\\Users\\GIANG\\Downloads\\Simple-ocr-hardsubs-main\\Tập 07 Boku no Kokoro no Yabai Yatsu "
-#                        "Season 2 (The Dangers in My Heart Season 2, Bokuyaba) 2024 HD-VietSub.srt")
-
-# parameter[
-#     "origin_audio_path"] = ("C:\\Users\\GIANG\\Downloads\\Simple-ocr-hardsubs-main\\[MTBB] The Dangers in My Heart S2 "
-#                             "- 07 (WEB 1080p) [83A9681F].mkv")
-# parameter[
-#     "ocr_audio_path"] = ("C:\\Users\\GIANG\\Downloads\\Simple-ocr-hardsubs-main\\Tập 07 Boku no Kokoro no Yabai Yatsu "
-#                          "Season 2 (The Dangers in My Heart Season 2, Bokuyaba) 2024 HD-VietSub.mp4")
-
-# parameter["output_filename"] = "Output.ass"
 
 # Define the window's contents
 layout = [[sg.Text("Synced sub: "), 
