@@ -20,36 +20,35 @@ dictionary_path = join("dictionaries", "enamdict.txt")
 sym_spell.load_dictionary(dictionary_path, 0, 1, encoding="cp932")
 
 # try:  
-# 	req = requests.get("https://anotepad.com/notes/ca7d4apf")
-# 	if "Allow" in req.text:
-# 		pass
-# 	else:
-# 		print("Too old to work :v ")
-# 		exit()
+#     req = requests.get("https://anotepad.com/notes/ca7d4apf")
+#     if "Allow" in req.text:
+#         pass
+#     else:
+#         print("Too old to work :v ")
+#         exit()
 # except:
-# 	print("Too old to work :v ")
-# 	exit()
+#     print("Too old to work :v ")
+#     exit()
 
 
 config = configparser.ConfigParser()
 config.read('config.ini', encoding = "utf8")
 
 def get_para_from_recent(default = False):
-	if default:
-		parameter = dict(config["Default"])
-	else:
-		parameter = dict(config["Recent"])
-	for k in parameter.keys():
-		if parameter[k] in ["True", "False"]:
-			parameter[k] = bool(parameter[k])
-		elif parameter[k].replace(".","").isdigit():
-			if "." not in parameter[k]:
-				parameter[k] = int(parameter[k])
-			else:
-				parameter[k] = float(parameter[k])
-	return parameter
+    if default:
+        parameter = dict(config["Default"])
+    else:
+        parameter = dict(config["Recent"])
+    for k in parameter.keys():
+        if parameter[k] in ["True", "False"]:
+            parameter[k] = bool(parameter[k])
+        elif parameter[k].replace(".","").isdigit():
+            if "." not in parameter[k]:
+                parameter[k] = int(parameter[k])
+            else:
+                parameter[k] = float(parameter[k])
+    return parameter
 parameter = get_para_from_recent()
-
 
 # Define the window's contents
 layout = [[sg.Text("Synced sub: "), 
@@ -79,7 +78,7 @@ layout = [[sg.Text("Synced sub: "),
           [sg.Text("frame_distance: "),
            sg.Spin([ig for ig in range(10)], parameter["frame_distance"], key="frame_distance", size=(20, 1))],
           # [sg.Text("same_rate: "), sg.Input(key="same_rate", expand_x=True, default_text = parameter["same_rate"])],
-          [sg.Text(size=(40, 1), key='log')],
+          [sg.Text(size=(40, 1), key='log'),sg.Checkbox(text="quit_split_line_section",key="quit_split_line_section", default=False,visible=False)],
           [sg.Button('Reset setting'), sg.Push(), sg.Button('Ok', size=(20, 1)), sg.Button('Quit')]]
 
 # Create the window
@@ -103,37 +102,28 @@ while True:
                 pass
 
     if event == "Ok":
-        # Load values from GUI -> parameter
-        # for ta in parameter.keys():
-        #     if ta in values.keys():
-        #         if type(parameter[ta]) == type(True):
-        #         	parameter[ta] = bool(values[ta])
-        #         elif type(parameter[ta]) == type(1):
-        #         	parameter[ta] = int(values[ta])
-        #         elif type(parameter[ta]) == type(1.1):
-        #         	parameter[ta] = float(values[ta])
-        #         else:
-        #         	parameter[ta] = values[ta]
 
         for ta in parameter.keys():
             if ta in values.keys():
                 if values[ta] in ["True", "False"]:
-                	parameter[ta] = bool(values[ta])
+                    parameter[ta] = bool(values[ta])
                 else:
-                	try:
-	                	parameter[ta] = int(values[ta])
-	                except:
-	                	if len(re.findall(r"[0-9]+/[0-9]+",values[ta]))>0:
-	                		parameter[ta] = int(values[ta].split("/")[0])/int(values[ta].split("/")[1])
-	                	else:
-		                	try:
-		                		parameter[ta] = float(values[ta])
-		                	except:
-		                		try:
-		                			parameter[ta] = str(values[ta])
-		                		except:
-		                			pass
-        print(parameter)
+                    try:
+                        parameter[ta] = float(values[ta])
+                    except:
+                        if len(re.findall(r"[0-9]+/[0-9]+",values[ta]))>0:
+                            parameter[ta] = int(values[ta].split("/")[0])/int(values[ta].split("/")[1])
+                        else:
+                            try:
+                                parameter[ta] = float(values[ta])
+                            except:
+                                try:
+                                    parameter[ta] = str(values[ta])
+                                except:
+                                    pass
+
+        if parameter["framerate"] in [23.976023976023978, 23.976, 23.98]:
+            parameter["framerate"] = 24000/1001
         # Check output_filename var
         pre, ext = splitext(parameter["output_filename"])
         parameter["output_filename"] = pre + ".ass"
@@ -154,29 +144,25 @@ while True:
 
 
 def split_line(stri):
+    # remove \N ở đầu câu
     temp_split_line = re.sub(r"^\\N {0,5}([a-z0-9đóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵ])",
                              r" \1",
                              stri)
     temp_split_line = temp_split_line.replace("\\N", "]")
-    # Chia các mảng từ
+    # Tìm các mảng câu có dấu ngắt câu ở cuối
     temp_split_line = re.findall(
-        r"[^!\"#$%&\\\'()*+,\-./:;<=>?@\[\\]^_`{|}~]+|[!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]", temp_split_line)
-    # Các mảng từ có chứa dấu câu
+        r"[^!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\]^_`{|}~]+|[!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]", temp_split_line)
+    
+    # Tìm index các dấu câu có ý nghĩa
     text_index = [temp_split_line.index(a) for a in temp_split_line if not any(
-        t in a for t in r"\!\"\#\$\%\&\\\'\(\)\*\+\,\-\.\/\:\;\<\=\>\?\@\[\\\\\]\^\_\`\{\|\}\~") and len(a) > 0]
+        t in a for t in r"\!\"\#\$\%\&\\\'\(\)\*\+\,\.\/\:\;\<\=\>\?\@\[\\\\\]\^\_\`\{\|\}\~") and len(a) > 0]
     print(text_index)
-    print(stri)
+    print(temp_split_line)
 
     if len(text_index) <= 1:
         result = [stri]
         return result
     else:
-        # result = ["".join(temp[:text_index[1]])]
-        # for tex in range(1,len(text_index)):
-        # 	if tex<len(text_index)-1:
-        # 		result+=["".join(temp[text_index[tex]:text_index[tex+1]])]
-        # 	else:
-        # 		result+=["".join(temp[text_index[tex]:])]
         result = ["".join(temp_split_line[:text_index[1]]), "".join(temp_split_line[text_index[1]:])]
         for i in range(len(result)):
             result[i] = result[i].replace("]", "").lstrip().rstrip()
@@ -278,15 +264,16 @@ def combine_sub(a_group, b_group):
 def split_sub(a_group, b_group):
     # Thử split sub theo quy trình
     split = split_line(b_group[0].text)
-    for q in range(len(split) - len(b_group)):
-        b_group += [b_group[0].copy()]
-    for q in range(len(b_group)):
-        b_group[q].text = split[q]
 
-    ste = len(b_group)
-    for q in range(len(a_group) - len(b_group)):
-        b_group += [a_group[q + ste].copy()]
-        b_group[-1].text = ""
+    max_length = max(len(a_group), len(b_group))
+    sample_line = a_group[-1].copy()
+    sample_line.text = ""
+
+    a_group += [ sample_line ] * (max_length - len(a_group))
+    b_group += [ sample_line ] * (max_length - len(b_group))
+
+    for q in range(len(split)):
+        b_group[q].text = split[q]
 
     if parameter["quit_split_line_section"]:
         for blablo in range(len(a_group)):
@@ -527,31 +514,12 @@ for i_ocr in range(len(ocr_sub)):
         else:
             sug = check_spelling(temp[t])
             # if not sug[1]:
-            # 	print(temp[t])
+            #     print(temp[t])
             temp[t] = sug
 
     temp_res = len(temp) - sum([int(g[1]) for g in temp])
     if temp_res > 0:
         line_need_correction += [[i_ocr, temp, ocr_sub[i_ocr].text]]
-
-# line_need_correction = []
-# temp_sym = []
-# for i_ocr in range(len(ocr_sub)):
-# 	stri = ocr_sub[i_ocr].text.replace("\\N","\n")
-
-# 	temp = sym_spell.lookup_compound(stri, max_edit_distance=2, ignore_non_words=True, transfer_casing =True )
-
-# 	# print(temp, "\t\t\t\t" , ocr_sub[i_ocr].text)
-# 	temp = temp[0].term
-# 	if len(temp_sym) < len(sym_spell.replaced_words):
-# 		print(sym_spell.replaced_words)
-# 		for key in sym_spell.replaced_words.keys():
-# 			if key in temp_sym:
-# 				continue
-# 			print(key)
-# 			# line_need_correction+=[ i_ocr,[temp, False] ,ocr_sub[i_ocr].text]
-# 			print(temp, "\t\t\t\t" , ocr_sub[i_ocr].text)
-# 		temp_sym = sym_spell.replaced_words.keys()
 
 
 spelling_layout = [[sg.Push(), sg.Text('Double check pls...'), sg.Push()],
@@ -601,6 +569,15 @@ while i_ocr < len(ocr_sub):
     else:
         i_ocr += 1
 
+
+
+
+
+
+
+########################################## MAIN PART ######################################
+
+
 # Change time stamp
 temp_eng_time = [t.copy() for t in eng_sub if t.is_comment is False]
 temp_eng_time = sorted(temp_eng_time, key=lambda t: t.start)
@@ -622,8 +599,7 @@ for ocr_line in ocr_sub:
     for eng_line in eng_sub:
         if eng_line.is_comment: continue
         same_time = cal_same_time(eng_line, ocr_line)
-        if same_time > duration(eng_line) * parameter["same_rate"] or same_time > duration(ocr_line) * parameter[
-            "same_rate"]:
+        if same_time > duration(eng_line) * parameter["same_rate"] or same_time > duration(ocr_line) * parameter["same_rate"]:
             group += [{"start": eng_line.start, "end": eng_line.end, "eng": eng_line, "ocr": ocr_line}]
             is_has_engsub_group = True
     if not is_has_engsub_group:
