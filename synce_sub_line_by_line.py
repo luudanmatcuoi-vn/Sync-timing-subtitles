@@ -68,7 +68,7 @@ layout = [[sg.Text("Synced sub: "),
           [sg.Checkbox(text="Using sushi to normalized_similarity: ", key="is_using_sushi", default=parameter["is_using_sushi"])],
           [sg.Checkbox(text="Comment from_eng sub", key="comment_eng_sub", default=parameter["comment_eng_sub"])],
           [sg.Checkbox(text="Comment from_ocr sub", key="comment_ocr_sub", default=parameter["comment_ocr_sub"])],
-          [sg.Checkbox(text="Try translate sign", key="trans_sign", default=parameter["trans_sign"])],
+          [sg.Checkbox(text="Try translate sign", key="trans_sign", default=False, visible=False)],
           [sg.Text("same_rate: "), sg.Spin([ig / 100 for ig in range(101)], parameter["same_rate"], key="same_rate", size=(20, 1))],
           [sg.Text("distance_string_rate: "),
            sg.Spin([ig / 100 for ig in range(101)], parameter["distance_string_rate"], key="distance_string_rate",size=(20, 1))],
@@ -115,12 +115,9 @@ while True:
                             parameter[ta] = int(values[ta].split("/")[0])/int(values[ta].split("/")[1])
                         else:
                             try:
-                                parameter[ta] = float(values[ta])
+                                parameter[ta] = str(values[ta])
                             except:
-                                try:
-                                    parameter[ta] = str(values[ta])
-                                except:
-                                    pass
+                                pass
 
         if parameter["framerate"] in [23.976023976023978, 23.976, 23.98]:
             parameter["framerate"] = 24000/1001
@@ -156,8 +153,6 @@ def split_line(stri):
     # Tìm index các dấu câu có ý nghĩa
     text_index = [temp_split_line.index(a) for a in temp_split_line if not any(
         t in a for t in r"\!\"\#\$\%\&\\\'\(\)\*\+\,\.\/\:\;\<\=\>\?\@\[\\\\\]\^\_\`\{\|\}\~") and len(a) > 0]
-    print(text_index)
-    print(temp_split_line)
 
     if len(text_index) <= 1:
         result = [stri]
@@ -166,6 +161,9 @@ def split_line(stri):
         result = ["".join(temp_split_line[:text_index[1]]), "".join(temp_split_line[text_index[1]:])]
         for i in range(len(result)):
             result[i] = result[i].replace("]", "").lstrip().rstrip()
+        for r in range(len(result)):
+        	if len(result[r])>0:
+	        	result[r] = result[r][0].upper() + result[r][1:]
         return result
 
 
@@ -256,7 +254,7 @@ def combine_sub(a_group, b_group):
 
     if len(b_group) == 1:
         a_group[0] = apply_sub(a_group[0], b_group[0].text)
-        a_group[0].name = "combine"
+        a_group[0].name = a_group[0].name+"__tag:combine"
 
     return a_group
 
@@ -274,6 +272,10 @@ def split_sub(a_group, b_group):
 
     for q in range(len(split)):
         b_group[q].text = split[q]
+
+    # Gán tag:split vào a_group
+    for q in range(len(a_group)):
+        a_group[q].name = a_group[q].name+"__tag:split"
 
     if parameter["quit_split_line_section"]:
         for blablo in range(len(a_group)):
@@ -378,8 +380,6 @@ def split_sub(a_group, b_group):
                 a_group[i] = apply_sub(a_group[i], b_group_result[i])
             break
     split_window.close()
-    for i in range(len(a_group)):
-        a_group[i].name = "split"
     return a_group
 
 
@@ -406,12 +406,31 @@ def check_spelling(stri):
         else:
             return [result.term, False]
 
+def convert_actor(va):
+    if isinstance(va, str):
+        res = {}
+        va = va.split("__")
+        for v in va:
+            cla = v[v.index(":")+1:]
+            try:
+                cla = int(cla)
+            except:
+                pass
+            res[v[:v.index(":")]] = cla
+        return res
+    elif isinstance(va, dict):
+        res = []
+        for d in va.keys():
+            res+=[d+":"+str(va[d])]
+        res = "__".join(res)
+        return res
+
 
 ##########################################################################################
 #### ----------------------------------------START ----------------------------------#####
 ##########################################################################################
 
-
+### Sushi to sync sub by audio
 if parameter["is_using_sushi"]:
     system(
         'sushi.exe --src "{ocr_audio_path}" --dst "{origin_audio_path}" --script "{ocr_sub_path}" -o ocr_sushi.srt'.format(
@@ -424,20 +443,40 @@ else:
 eng_sub = pysubs2.load(parameter["origin_sub_path"])
 ocr_sub = pysubs2.load(ocr_sub_sushi_path)
 
-# Nhặt tất cả sign dialogue ra khỏi eng_sub
+# Chèn object vào actor của eng_sub
+for i_s in range(len(eng_sub)):
+    old_name = eng_sub[i_s].name
+    eng_sub[i_s].name = convert_actor( {"oldname":old_name, "id":str(i_s+1)} )
+
+# Nhặt tất cả dialogue sign ra khỏi eng_sub
 sign_group = []
 i_eng = 0
 while i_eng < len(eng_sub):
     if any(["\\" + tag + "(" in eng_sub[i_eng].text for tag in ["pos", "mov", "org", "clip"]]) and not eng_sub[
         i_eng].is_comment:
-        eng_sub[i_eng].name = "sign"
+        eng_sub[i_eng].name = eng_sub[i_eng].name+"__tag:sign"
         sign_group += [eng_sub[i_eng]]
         del eng_sub[i_eng]
     else:
         i_eng += 1
+
+# Nhặt tất cả comment ra khỏi eng_sub
+comment_group = []
+i_eng = 0
+while i_eng < len(eng_sub):
+    if eng_sub[i_eng].is_comment:
+        eng_sub[i_eng].name = eng_sub[i_eng].name+"__tag:comment"
+        comment_group += [eng_sub[i_eng]]
+        del eng_sub[i_eng]
+    else:
+        i_eng += 1
+
 # Nhận diện layer thường sử dụng
-layer_eng_sub = [eng.layer for eng in eng_sub]
-layer_eng_sub = max(set(layer_eng_sub), key=layer_eng_sub.count)
+layer_eng_sub = [eng.layer for eng in eng_sub if eng.layer!=0]
+if len(layer_eng_sub)>0:
+    layer_eng_sub = max(set(layer_eng_sub), key=layer_eng_sub.count)
+else:
+    layer_eng_sub = 0
 
 # Filter sub ocr : Loại bỏ sub trống, filter chính tả, cảnh báo các ký tự lạ
 f = open('filter_rules.txt', "r", encoding="utf8")
@@ -460,7 +499,11 @@ while i_ocr < len(ocr_sub):
         elif r[0] == "replace_word":
             ocr_sub[i_ocr].text = re.sub(r"\b" + r[1] + r"\b", r[2], ocr_sub[i_ocr].text)
         else:
-            ocr_sub[i_ocr].text = re.sub(r[1], r[2], ocr_sub[i_ocr].text)
+            regex_str = r[2].replace("\\U","[UPPER]").replace("\\L","[LOWER]").replace("\\E","[END_UL]")
+            ocr_sub[i_ocr].text = re.sub(r[1], regex_str, ocr_sub[i_ocr].text)
+            if "[END_UL]" in ocr_sub[i_ocr].text:
+                ocr_sub[i_ocr].text = re.sub(r"\[UPPER\]([^\[]*)\[END_UL\]", lambda m: f"{m.group(1).upper()}", ocr_sub[i_ocr].text)
+                ocr_sub[i_ocr].text = re.sub(r"\[LOWER\]([^\[]*)\[END_UL\]", lambda m: f"{m.group(1).lower()}", ocr_sub[i_ocr].text)
     # Print cảnh báo các ký tự lạ
     match = re.findall(
         r"[^0-9a-zA-Z\s\WđóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵĐÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÁÀẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÊẾỀỂỄỆÉÈẺẼẸÚÙỦŨỤƯỨỪỬỮỰÍÌỈĨỊÝỲỶỸỴ]",
@@ -513,8 +556,6 @@ for i_ocr in range(len(ocr_sub)):
                 temp[t] = [temp[t], False]
         else:
             sug = check_spelling(temp[t])
-            # if not sug[1]:
-            #     print(temp[t])
             temp[t] = sug
 
     temp_res = len(temp) - sum([int(g[1]) for g in temp])
@@ -558,7 +599,6 @@ while True:
             else:
                 temp_da = max(temp_da, key=len)
             ocr_sub[int(da[0])].text = temp_da.lstrip().rstrip().replace("\n", "\\N")
-        # print(ocr_sub[int(da[0])].text)
         spelling_window.close()
         break
 
@@ -590,25 +630,20 @@ for i in range(len(ocr_sub)):
                 parameter["soft_combine_rate"]:
             ocr_sub[i].start = temp_eng_time[t].start
             ocr_sub[i].end = temp_eng_time[t + 1].end
-# print(ocr_sub[i].text)
 
 # Link tất cả các sub với nhau -> lưu vào group
 group = []
 for ocr_line in ocr_sub:
     is_has_engsub_group = False
     for eng_line in eng_sub:
-        if eng_line.is_comment: continue
         same_time = cal_same_time(eng_line, ocr_line)
-        if same_time > duration(eng_line) * parameter["same_rate"] or same_time > duration(ocr_line) * parameter["same_rate"]:
+        if same_time > duration(eng_line)*parameter["same_rate"] or same_time > duration(ocr_line)*parameter["same_rate"]:
             group += [{"start": eng_line.start, "end": eng_line.end, "eng": eng_line, "ocr": ocr_line}]
             is_has_engsub_group = True
     if not is_has_engsub_group:
         group += [{"start": ocr_line.start, "end": ocr_line.end, "eng": None, "ocr": ocr_line}]
 
 for eng_line in eng_sub:
-    if eng_line.is_comment:
-        group += [{"start": eng_line.start, "end": eng_line.end, "eng": eng_line, "ocr": None}]
-        continue
     is_has_engsub_group = False
     for ocr_line in ocr_sub:
         same_time = cal_same_time(ocr_line, eng_line)
@@ -643,9 +678,9 @@ while i_group < len(group):
             break
 
         # Tìm kiếm sub chung -> đưa về a/b
-        if group[temp_i]["eng"] == a[0] and group[temp_i]["ocr"] != b[0] and group[temp_i]["ocr"] is not None:
+        if group[temp_i]["eng"] == a[-1] and group[temp_i]["ocr"] != b[-1] and group[temp_i]["ocr"] is not None:
             b += [group[temp_i]["ocr"]]
-        elif group[temp_i]["eng"] != a[0] and group[temp_i]["ocr"] == b[0] or is_same_time(group[i_group]["eng"],
+        elif group[temp_i]["eng"] != a[-1] and group[temp_i]["ocr"] == b[-1] or is_same_time(group[i_group]["eng"],
                                                                                            group[temp_i]["eng"]):
             a += [group[temp_i]["eng"]]
         else:
@@ -656,20 +691,22 @@ while i_group < len(group):
     # Chia a và b vào các trường hợp
     if len(a) == 0:
         for i in range(len(b)):
-            b[i].name = "from_ocr"
+            ids = convert_actor(best_subtitle[-1].name)["id"]
+            b[i].name = convert_actor({"tag":"from_ocr","oldname":"","id":ids})
             b[i].layer = layer_eng_sub
             b[i].type = "Comment"
         best_subtitle += b
 
     if len(b) == 0:
-        for i in range(len(a)):
-            a[i].name = "from_eng"
+        for i_s in range(len(a)):
+            a[i_s].name = a[i_s].name+"__tag:from_eng"
         if parameter["comment_eng_sub"]:
             best_subtitle += [apply_sub(tg, "") for tg in a]
         else:
             best_subtitle += a
 
     if len(a) == 1 and len(b) == 1:
+        a[0].name = a[0].name+"__tag:"
         best_subtitle += [apply_sub(a, b)]
 
     if len(a) == 1 and len(b) > 1:
@@ -677,6 +714,34 @@ while i_group < len(group):
 
     if len(a) > 1 and len(b) == 1:
         best_subtitle += split_sub(a, b)
+
+# Tìm các sub from_eng, from_sub cô độc
+i_s = 0
+while True:
+    try:
+        if "tag:from_" not in best_subtitle[i_s].name \
+        and "tag:from_eng" in best_subtitle[i_s+1].name \
+        and "tag:from_ocr" in best_subtitle[i_s+2].name \
+        and "tag:from_" not in best_subtitle[i_s+3].name:
+            best_subtitle[i_s+1] = apply_sub(best_subtitle[i_s+1], best_subtitle[i_s+2])
+            best_subtitle[i_s+1].text = best_subtitle[i_s+1].text.replace("{[","{").replace("]}","}")
+            best_subtitle[i_s+1].name = best_subtitle[i_s+1].name.replace("tag:from_eng","tag:")
+            del best_subtitle[i_s+2]
+        elif "tag:from_" not in best_subtitle[i_s].name \
+        and "tag:from_ocr" in best_subtitle[i_s+1].name \
+        and "tag:from_end" in best_subtitle[i_s+2].name \
+        and "tag:from_" not in best_subtitle[i_s+3].name:
+            best_subtitle[i_s+2] = apply_sub(best_subtitle[i_s+2], best_subtitle[i_s+1])
+            best_subtitle[i_s+2].text = best_subtitle[i_s+2].text.replace("{[","{").replace("]}","}")
+            best_subtitle[i_s+2].name = best_subtitle[i_s+2].name.replace("tag:from_eng","tag:")
+            del best_subtitle[i_s+1]
+        else:
+            i_s+=1
+    except:
+        break
+# for b in best_subtitle:
+#     print(b)
+
 
 # translate = [re.findall(r"\{[^\{\}]+(\\N){0,1}[^\{\}]*\}[^\{\}]+(\\N){0,1}[^\{\}\\]*",ta.text) for ta in best_subtitle ]
 translate = [re.findall(r"\{[^{}]+\\?N?[^{}]*}[^{}]+\\?N?[^{}\\]*", ta.text) for ta in best_subtitle]
@@ -694,7 +759,19 @@ for sign in sign_group:
         best_subtitle += [apply_sub(sign, trans)]
     else:
         best_subtitle += [sign]
-# print(sign)
+
+for comment in comment_group:
+    best_subtitle += [comment]
+
+#Sắp xếp best_subtitle theo đúng ids:
+best_subtitle = sorted(best_subtitle, key= lambda tq: (convert_actor(tq.name)["id"], tq.start, tq.end ), reverse=False)
+for sub in range(len(best_subtitle)):
+    ob = convert_actor(best_subtitle[sub].name)
+    ob = str(ob["oldname"])+"__"+str(ob["tag"])
+    ob = ob.replace("comment","")
+    ob = ob.rstrip("__")
+    ob = ob.strip("__")
+    best_subtitle[sub].name = ob
 
 # Export
 write_sub = pysubs2.load(parameter["origin_sub_path"])
