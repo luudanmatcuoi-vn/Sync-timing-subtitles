@@ -105,7 +105,7 @@ while True:
 
         for ta in parameter.keys():
             if ta in values.keys():
-                if values[ta] in ["True", "False"]:
+                if values[ta] in ["True", "False", True, False]:
                     parameter[ta] = bool(values[ta])
                 else:
                     try:
@@ -276,7 +276,25 @@ def combine_sub(a_group, b_group):
 
 def split_sub(a_group, b_group):
     # Thử split sub theo các dấu trong câu
-    split = split_line(b_group[0].text)
+    def count_split_symbol(stri):
+        return sum([stri.count(gt) for gt in parameter["punctuation"]])
+    def split_line_dict(sow):
+        sow = split_line(sow["text"])
+        return [{"text":soww,"splited":True,"count":count_split_symbol(soww)} for soww in sow]
+
+    split = [{"text":b_group[t].text,"splited":False,"count":count_split_symbol(b_group[t].text)} for t in range(len(b_group))]
+    while True:
+        need_split = [s for s in split if not s["splited"]]
+        if len(need_split)>0:
+            need_split = max(need_split, key = lambda p : p["count"])
+            need_split = split.index(need_split)
+            split = split[:need_split] + split_line_dict(split[need_split]) + split[need_split+1:]
+        else:
+            break
+
+        if len(split) >= len(a_group):
+            break
+    split = [s["text"] for s in split]
 
     b_group = split + [""] * ( len(a_group) - len(split) )
 
@@ -683,22 +701,48 @@ while i_group < len(group):
         # Nếu bên a/b rỗng -> sub chỉ từ 1 bên eng/ocr -> dừng lặp
         if len(a) == 0 or len(b) == 0:
             break
+        if group[temp_i]["ocr"] is None:
+            break
 
         # Tìm kiếm sub chung -> đưa về a/b
-        if group[temp_i]["eng"] == a[-1] and group[temp_i]["ocr"] != b[-1] and group[temp_i]["ocr"] is not None:
-            b += [group[temp_i]["ocr"]]
-        elif (group[temp_i]["eng"] != a[-1] and group[temp_i]["ocr"] == b[-1] ) or \
-                is_same_time(group[i_group]["eng"],group[temp_i]["eng"]) :
-            a += [group[temp_i]["eng"]]
-        else:
+        has_group_add = False
+        for gia in range(len(a)):
+            if group[temp_i]["eng"] == a[gia] and group[temp_i]["ocr"] != b[gia] and group[temp_i]["ocr"] is not None:
+                a += [group[temp_i]["eng"]]
+                b += [group[temp_i]["ocr"]]
+                has_group_add = True
+            elif (group[temp_i]["eng"] != a[gia] and group[temp_i]["ocr"] == b[gia] ) or \
+                    is_same_time(group[i_group]["eng"],group[temp_i]["eng"]) :
+                a += [group[temp_i]["eng"]]
+                b += [group[temp_i]["ocr"]]
+                has_group_add = True
+        if not has_group_add:
             break
+
         following += 1
+
+    g = 0
+    while g<len(a):
+        if a[g] in a[:g]:
+            del a[g]
+        else:
+            g+=1
+    g = 0
+    while g<len(b):
+        if b[g] in b[:g]:
+            del b[g]
+        else:
+            g+=1
+
     i_group += following
 
     # Chia a và b vào các trường hợp
     if len(a) == 0:
         for i in range(len(b)):
-            ids = convert_actor(best_subtitle[-1].name)["id"]
+            try:
+                ids = convert_actor(best_subtitle[-1].name)["id"]
+            except:
+                ids = 0
             b[i].name = convert_actor({"tag":"from_ocr","oldname":"","id":ids})
             b[i].layer = layer_eng_sub
             b[i].type = "Comment"
@@ -719,10 +763,10 @@ while i_group < len(group):
     if len(a) == 1 and len(b) > 1:
         best_subtitle += combine_sub(a, b)
 
-    if len(a) > 1 and len(b) == 1:
+    if len(a) > 1:
         best_subtitle += split_sub(a, b)
 
-# Tìm các sub from_eng, from_sub cô độc
+# Tìm các sub from_eng, from_sub cô độc đứng cạnh nhau
 i_s = 0
 while True:
     try:
@@ -736,7 +780,7 @@ while True:
             del best_subtitle[i_s+2]
         elif "tag:from_" not in best_subtitle[i_s].name \
         and "tag:from_ocr" in best_subtitle[i_s+1].name \
-        and "tag:from_end" in best_subtitle[i_s+2].name \
+        and "tag:from_eng" in best_subtitle[i_s+2].name \
         and "tag:from_" not in best_subtitle[i_s+3].name:
             best_subtitle[i_s+2] = apply_sub(best_subtitle[i_s+2], best_subtitle[i_s+1])
             best_subtitle[i_s+2].text = best_subtitle[i_s+2].text.replace("{[","{").replace("]}","}")
@@ -769,6 +813,7 @@ for comment in comment_group:
 
 #Sắp xếp best_subtitle theo đúng ids:
 best_subtitle = sorted(best_subtitle, key= lambda tq: (convert_actor(tq.name)["id"], tq.start, tq.end ), reverse=False)
+
 for sub in range(len(best_subtitle)):
     ob = convert_actor(best_subtitle[sub].name)
     ob = str(ob["oldname"])+"__"+str(ob["tag"])
