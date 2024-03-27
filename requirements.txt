@@ -1,0 +1,6 @@
+PySimpleGUI
+pysubs2
+Requests
+setuptools
+symspellpy
+textdistance
