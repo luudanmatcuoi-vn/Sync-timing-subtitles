@@ -145,26 +145,41 @@ def split_line(stri):
     temp_split_line = re.sub(r"^\\N {0,5}([a-z0-9đóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵ])",
                              r" \1",
                              stri)
-    temp_split_line = temp_split_line.replace("\\N", "]")
+    temp_split_line = temp_split_line.replace("\\N", " ] ")
     # Tìm các mảng câu có dấu ngắt câu ở cuối
     temp_split_line = re.findall(
-        r"[^!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\]^_`{|}~]+|[!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]", temp_split_line)
-    
-    # Tìm index các dấu câu có ý nghĩa
-    text_index = [temp_split_line.index(a) for a in temp_split_line if not any(
-        t in a for t in r"\!\"\#\$\%\&\\\'\(\)\*\+\,\.\/\:\;\<\=\>\?\@\[\\\\\]\^\_\`\{\|\}\~") and len(a) > 0]
+        r"[^!\"#$%&\\\'()*+,\-.\/:;<=>?@\[\\\]^_`{|}~]+|\.\.\.|[!\"#$%&\\\'()*+,\-.\/:;<=>?@\[\\\\\]^_`{|}~]+", temp_split_line)
 
-    if len(text_index) <= 1:
+    # Ngắt câu theo thứ tự ưu tiên
+    result = ""
+    for ch in ["]",".","!","?",";",",","-"]:
+        if ch in temp_split_line and result=="":
+            result = ["".join(temp_split_line[:temp_split_line.index(ch)+1]), \
+                    "".join(temp_split_line[temp_split_line.index(ch)+1:])]
+            try:
+                result.remove("")
+            except:
+                pass
+            if len(result)==1:
+                result = ""
+    if result == "":
         result = [stri]
-        return result
-    else:
-        result = ["".join(temp_split_line[:text_index[1]]), "".join(temp_split_line[text_index[1]:])]
-        for i in range(len(result)):
-            result[i] = result[i].replace("]", "").lstrip().rstrip()
-        for r in range(len(result)):
-        	if len(result[r])>0:
-	        	result[r] = result[r][0].upper() + result[r][1:]
-        return result
+
+    for ia in range(len(result)):
+        # Xóa ]
+        result[ia] = result[ia].replace("]", "").lstrip().rstrip()
+        result[ia] = re.sub(r"^( ){0,3}[-\.]( ){0,3}","",result[ia])
+
+        # Uppercase đầu câu
+        if len(result[ia])>0:
+            result[ia] = result[ia][0].upper() + result[ia][1:]
+
+    try:
+        result.remove("")
+    except:
+        pass
+
+    return result
 
 
 def cal_same_time(line1, line2):
@@ -260,18 +275,10 @@ def combine_sub(a_group, b_group):
 
 
 def split_sub(a_group, b_group):
-    # Thử split sub theo quy trình
+    # Thử split sub theo các dấu trong câu
     split = split_line(b_group[0].text)
 
-    max_length = max(len(a_group), len(b_group))
-    sample_line = a_group[-1].copy()
-    sample_line.text = ""
-
-    a_group += [ sample_line ] * (max_length - len(a_group))
-    b_group += [ sample_line ] * (max_length - len(b_group))
-
-    for q in range(len(split)):
-        b_group[q].text = split[q]
+    b_group = split + [""] * ( len(a_group) - len(split) )
 
     # Gán tag:split vào a_group
     for q in range(len(a_group)):
@@ -289,11 +296,11 @@ def split_sub(a_group, b_group):
                                                               default_text=a_group[t].text, disabled=True)] for t in
                                                 range(len(a_group))]
     b_group_list = [[sg.Text("OCR sub")]] + [[sg.Multiline(key=f"b_group_{t}",
-                                                           size=(text_width, len(b_group[t].text) // text_width + 2),
-                                                           default_text=b_group[t].text)] for t in range(len(b_group))]
+                                                           size=(text_width, len(b_group[t]) // text_width + 2),
+                                                           default_text=b_group[t])] for t in range(len(b_group))]
     split_layout = [[sg.Column(a_group_list), sg.VSeperator(), sg.Column(b_group_list), ],
                     [sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
-                     sg.Button('Copy eng_sub')],
+                     sg.Button('Copy synced_sub')],
                     [sg.Push(), sg.Push(), sg.Push(), sg.Button('Ok'), sg.Button('Cancel'), sg.Push(), sg.Push(),
                      sg.Button('Quit section')]
                     ]
@@ -350,7 +357,7 @@ def split_sub(a_group, b_group):
                     e += 1
                 except:
                     break
-        if event == "Copy eng_sub":
+        if event == "Copy synced_sub":
             e = 0
             while True:
                 try:
@@ -680,8 +687,8 @@ while i_group < len(group):
         # Tìm kiếm sub chung -> đưa về a/b
         if group[temp_i]["eng"] == a[-1] and group[temp_i]["ocr"] != b[-1] and group[temp_i]["ocr"] is not None:
             b += [group[temp_i]["ocr"]]
-        elif group[temp_i]["eng"] != a[-1] and group[temp_i]["ocr"] == b[-1] or is_same_time(group[i_group]["eng"],
-                                                                                           group[temp_i]["eng"]):
+        elif (group[temp_i]["eng"] != a[-1] and group[temp_i]["ocr"] == b[-1] ) or \
+                is_same_time(group[i_group]["eng"],group[temp_i]["eng"]) :
             a += [group[temp_i]["eng"]]
         else:
             break
@@ -739,9 +746,6 @@ while True:
             i_s+=1
     except:
         break
-# for b in best_subtitle:
-#     print(b)
-
 
 # translate = [re.findall(r"\{[^\{\}]+(\\N){0,1}[^\{\}]*\}[^\{\}]+(\\N){0,1}[^\{\}\\]*",ta.text) for ta in best_subtitle ]
 translate = [re.findall(r"\{[^{}]+\\?N?[^{}]*}[^{}]+\\?N?[^{}\\]*", ta.text) for ta in best_subtitle]
@@ -770,7 +774,7 @@ for sub in range(len(best_subtitle)):
     ob = str(ob["oldname"])+"__"+str(ob["tag"])
     ob = ob.replace("comment","")
     ob = ob.rstrip("__")
-    ob = ob.strip("__")
+    ob = ob.lstrip("__")
     best_subtitle[sub].name = ob
 
 # Export
