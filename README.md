@@ -3,9 +3,15 @@
 <br>--> Transfer Timing from other subtitles to ocr sub
   
 ## Usages
-- Select Timed sub + ocr sub and audio/video if they from different version (eg. BD and TVs)
-- Change parameters in config.ini
-- Make your own SymSpell dictionary
+- Run it
+- Can Change parameters in config.ini
+- Can make your own SymSpell dictionary
+- 
+## Feature
+- Sync based audio using sushi if they from different version (eg. BD and TVs)
+- Spell check using SymSpell
+- Add ename dictionary to check names, locations.
+- Auto-detect subtitles need combining or splitting
 - Add filter rules (many methods):
   + Replace
   + Regular expression
