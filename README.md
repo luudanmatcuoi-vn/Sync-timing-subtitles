@@ -1,12 +1,6 @@
 # Sync-timing-subtitles 
 
 <br>--> Transfer Timing from other subtitles to ocr sub
-
-## Setup / Build
-- Install Python
-- run cmd `pip install -r requirements.txt`
-- Build using pyinstaller
-
   
 ## Usages
 - Select Timed sub + ocr sub and audio/video if they from different version (eg. BD and TVs)
@@ -17,6 +11,10 @@
   + Regular expression
   + Replace word
 
+## Setup / Build
+- Install Python
+- run cmd `pip install -r requirements.txt`
+- Build using pyinstaller
 
 Have fun
 
