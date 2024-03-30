@@ -1,3 +1,7 @@
+# Author       : Luudanmatcuoi
+# yt link   : https://www.youtube.com/channel/UCdyAb9TAX1qQ5R2-c91-x8g
+# GitHub link  : https://github.com/luudanmatcuoi-vn
+
 import configparser
 import pysubs2
 import re
@@ -19,16 +23,16 @@ sym_spell.load_dictionary(dictionary_path, 0, 1, encoding="utf8")
 dictionary_path = join("dictionaries", "enamdict.txt")
 sym_spell.load_dictionary(dictionary_path, 0, 1, encoding="cp932")
 
-# try:  
-#     req = requests.get("https://anotepad.com/notes/ca7d4apf")
-#     if "Allow" in req.text:
-#         pass
-#     else:
-#         print("Too old to work :v ")
-#         exit()
-# except:
-#     print("Too old to work :v ")
-#     exit()
+try:  
+    req = requests.get("https://anotepad.com/notes/ca7d4apf")
+    if "Allow" in req.text:
+        pass
+    else:
+        print("Too old to work :v ")
+        exit()
+except:
+    print("Too old to work :v ")
+    exit()
 
 
 config = configparser.ConfigParser()
@@ -51,21 +55,21 @@ def get_para_from_recent(default = False):
 parameter = get_para_from_recent()
 
 # Define the window's contents
-layout = [[sg.Text("Synced sub: "), 
+layout = [[sg.Text("Timed sub: "), 
            sg.Input(key="origin_sub_path", change_submits=True, expand_x=True, default_text=parameter["origin_sub_path"]),
            sg.FileBrowse(key='origin_sub_path')],
           [sg.Text("ocr sub: "),
            sg.Input(key="ocr_sub_path", change_submits=True, expand_x=True, default_text=parameter["ocr_sub_path"]),
            sg.FileBrowse(key='ocr_sub_path')],
 
-          [sg.Text("Audio of synced sub: "), sg.Input(key="origin_audio_path", change_submits=True, expand_x=True, default_text=parameter["origin_audio_path"]),
+          [sg.Text("Audio/video of timed sub: "), sg.Input(key="origin_audio_path", change_submits=True, expand_x=True, default_text=parameter["origin_audio_path"]),
            sg.FileBrowse(key='origin_audio_path')],
-          [sg.Text("Audio of ocr sub: "),
+          [sg.Text("Audio/video of ocr sub: "),
            sg.Input(key="ocr_audio_path", change_submits=True, expand_x=True, default_text=parameter["ocr_audio_path"]),
            sg.FileBrowse(key='ocr_audio_path')],
           [sg.Text("Output: "), sg.Input(key="output_filename", expand_x=True, default_text=parameter["output_filename"])],
           # [sg.Input(key='INPUT')],
-          [sg.Checkbox(text="Using sushi to normalized_similarity: ", key="is_using_sushi", default=parameter["is_using_sushi"])],
+          [sg.Checkbox(text="Using sushi auto sync sub based on audio: ", key="is_using_sushi", enable_events=True, default=parameter["is_using_sushi"])],
           [sg.Checkbox(text="Comment from_eng sub", key="comment_eng_sub", default=parameter["comment_eng_sub"])],
           [sg.Checkbox(text="Comment from_ocr sub", key="comment_ocr_sub", default=parameter["comment_ocr_sub"])],
           [sg.Checkbox(text="Try translate sign", key="trans_sign", default=False, visible=False)],
@@ -82,16 +86,23 @@ layout = [[sg.Text("Synced sub: "),
           [sg.Button('Reset setting'), sg.Push(), sg.Button('Ok', size=(20, 1)), sg.Button('Quit')]]
 
 # Create the window
-window = sg.Window('Sub_sync code by luudanmatcuoi ver 1.2', layout,icon='dango.ico')
+window = sg.Window('Transfer timing subtitles by luudanmatcuoi v1.2.1', layout,icon='dango.ico')
 
 # Display and interact with the Window using an Event Loop
 while True:
     event, values = window.read()
-    # See if user wants to quit or window was closed
+
     if event == sg.WINDOW_CLOSED or event == 'Quit':
         exit()
-    # Output a message to the window
-    # window['OUTPUT'].update('Hello ' + values['INPUT'] + "! Thanks for trying PySimpleGUI")
+
+    elif event == 'is_using_sushi':
+        if values["is_using_sushi"]:
+            window["origin_audio_path"].update(text_color='black',disabled=False)
+            window["ocr_audio_path"].update(text_color='black',disabled=False)
+        else:
+            window["origin_audio_path"].update(text_color='grey60',disabled=True)
+            window["ocr_audio_path"].update(text_color='grey60',disabled=True)
+
     if event == "Reset setting":
         parameter = get_para_from_recent(default = True)
         for ta in parameter.keys():
@@ -102,7 +113,6 @@ while True:
                 pass
 
     if event == "Ok":
-
         for ta in parameter.keys():
             if ta in values.keys():
                 if values[ta] in ["True", "False", True, False]:
@@ -124,6 +134,7 @@ while True:
         # Check output_filename var
         pre, ext = splitext(parameter["output_filename"])
         parameter["output_filename"] = pre + ".ass"
+        list_characters = parameter["characters"]
 
         # Save setting to recent
         config["Recent"] = parameter
@@ -142,9 +153,7 @@ while True:
 
 def split_line(stri):
     # remove \N ở đầu câu
-    temp_split_line = re.sub(r"^\\N {0,5}([a-z0-9đóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵ])",
-                             r" \1",
-                             stri)
+    temp_split_line = re.sub(r'^\\N {0,5}([a-z0-9' +re.escape(list_characters.lower())+r"])", r" \1", stri)
     temp_split_line = temp_split_line.replace("\\N", " ] ")
     # Tìm các mảng câu có dấu ngắt câu ở cuối
     temp_split_line = re.findall(
@@ -309,7 +318,7 @@ def split_sub(a_group, b_group):
 
     # Open window
     text_width = 45
-    a_group_list = [[sg.Text("Synced sub")]] + [[sg.Multiline(key=f"a_group_{t}",
+    a_group_list = [[sg.Text("Timed sub")]] + [[sg.Multiline(key=f"a_group_{t}",
                                                               size=(text_width, len(a_group[t].text) // text_width + 2),
                                                               default_text=a_group[t].text, disabled=True)] for t in
                                                 range(len(a_group))]
@@ -318,11 +327,11 @@ def split_sub(a_group, b_group):
                                                            default_text=b_group[t])] for t in range(len(b_group))]
     split_layout = [[sg.Column(a_group_list), sg.VSeperator(), sg.Column(b_group_list), ],
                     [sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
-                     sg.Button('Copy synced_sub')],
+                     sg.Button('Copy timed_sub')],
                     [sg.Push(), sg.Push(), sg.Push(), sg.Button('Ok'), sg.Button('Cancel'), sg.Push(), sg.Push(),
                      sg.Button('Quit section')]
                     ]
-    split_window = sg.Window('Sub_sync code by luudanmatcuoi', split_layout, finalize=True)
+    split_window = sg.Window('Transfer timing subtitle by luudanmatcuoi', split_layout, finalize=True)
     split_window.bind("<Escape>", "ESCAPE")
 
     while True:
@@ -375,7 +384,7 @@ def split_sub(a_group, b_group):
                     e += 1
                 except:
                     break
-        if event == "Copy synced_sub":
+        if event == "Copy timed_sub":
             e = 0
             while True:
                 try:
@@ -422,8 +431,7 @@ def check_spelling(stri):
         return [stri, True]
     else:
         if stri[0].isupper():
-            if any(ext in stri for ext in
-                   "đóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵĐÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÁÀẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÊẾỀỂỄỆÉÈẺẼẸÚÙỦŨỤƯỨỪỬỮỰÍÌỈĨỊÝỲỶỸỴ"):
+            if any(ext in stri for ext in list_characters):
                 result.term = result.term[0].upper() + result.term[1:]
                 return [result.term, False]
             else:
@@ -477,7 +485,7 @@ for i_s in range(len(eng_sub)):
 sign_group = []
 i_eng = 0
 while i_eng < len(eng_sub):
-    if any(["\\" + tag + "(" in eng_sub[i_eng].text for tag in ["pos", "mov", "org", "clip"]]) and not eng_sub[
+    if any(["\\" + tag + "(" in eng_sub[i_eng].text for tag in ["pos", "move", "org", "clip"]]) and not eng_sub[
         i_eng].is_comment:
         eng_sub[i_eng].name = eng_sub[i_eng].name+"__tag:sign"
         sign_group += [eng_sub[i_eng]]
@@ -531,7 +539,7 @@ while i_ocr < len(ocr_sub):
                 ocr_sub[i_ocr].text = re.sub(r"\[LOWER\]([^\[]*)\[END_UL\]", lambda m: f"{m.group(1).lower()}", ocr_sub[i_ocr].text)
     # Print cảnh báo các ký tự lạ
     match = re.findall(
-        r"[^0-9a-zA-Z\s\WđóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵĐÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÁÀẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÊẾỀỂỄỆÉÈẺẼẸÚÙỦŨỤƯỨỪỬỮỰÍÌỈĨỊÝỲỶỸỴ]",
+        r"[^0-9a-zA-Z\s\W%s]" % list_characters,
         ocr_sub[i_ocr].text)
     if len(match) > 0 and "OCR_EMPTY_RESULT" not in ocr_sub[i_ocr].text:
         print("Caution unexpected characters:\t" + " ".join(match) + "\t" + ocr_sub[i_ocr].text)
@@ -540,9 +548,7 @@ while i_ocr < len(ocr_sub):
     tempa = ocr_sub[i_ocr].text.split("\\N")
     tempb = "dfasdfaergsergdzf".join(tempa).split("dfasdfaergsergdzf")
     for t in range(len(tempa)):
-        tempa[t] = re.sub(
-            r"[^0-9a-zA-Z\s\WđóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵĐÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÁÀẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÊẾỀỂỄỆÉÈẺẼẸÚÙỦŨỤƯỨỪỬỮỰÍÌỈĨỊÝỲỶỸỴ]",
-            "", tempa[t])
+        tempa[t] = re.sub(  r"[^0-9a-zA-Z\s\W%s]" % re.escape(list_characters) , "", tempa[t])
         ga = tempa[t].replace(" ", "")
         gb = tempb[t].replace(" ", "")
         if len(ga) < len(gb) * (1 - 60 / 100):
@@ -569,12 +575,11 @@ for i_ocr in range(len(ocr_sub)):
         ocr_sub[i_ocr].text.replace("\\N", "\n"))
     for t in range(len(temp)):
         # Lọc các word có 1 ký tự
-        if len(temp[t]) == 1 and re.search(
-                r"[a-zA-Z0-9\s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~đóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵĐÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÁÀẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÊẾỀỂỄỆÉÈẺẼẸÚÙỦŨỤƯỨỪỬỮỰÍÌỈĨỊÝỲỶỸỴ]",
-                temp[t]):
+        tpattern = r'[a-zA-Z0-9\s!\"#$%&\'()*+,\-./:;<=>?@\[\]^_`\{\|\}\\~'+re.escape(list_characters)+r"]"
+        if len(temp[t]) == 1 and re.search( tpattern , temp[t]):
             # Các word 1 ký tự là dấu câu hoặc số
             if re.search(
-                    r"[\s()\"!,\-.;?_~a-zA-Z0-9đóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵĐÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÁÀẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÊẾỀỂỄỆÉÈẺẼẸÚÙỦŨỤƯỨỪỬỮỰÍÌỈĨỊÝỲỶỸỴ]",
+                    r"[\s()\"!,\-.;?_~a-zA-Z0-9%s]" % re.escape(list_characters),
                     temp[t]):
                 temp[t] = [temp[t], True]
             else:
@@ -721,15 +726,18 @@ while i_group < len(group):
 
         following += 1
 
+    def flat_line(l):
+        return f"l_{str(l.layer)}_s_{str(l.start)}_e_{str(l.end)}_c_{str(l.is_comment)}_s_{str(l.style)}_n_{str(l.name)}_t_{str(l.text)}"
+
     g = 0
     while g<len(a):
-        if a[g] in a[:g]:
+        if flat_line(a[g]) in [flat_line(ka) for ka in a[:g]]:
             del a[g]
         else:
             g+=1
     g = 0
     while g<len(b):
-        if b[g] in b[:g]:
+        if flat_line(b[g]) in [flat_line(ka) for ka in b[:g]]:
             del b[g]
         else:
             g+=1
@@ -792,21 +800,12 @@ while True:
         break
 
 # translate = [re.findall(r"\{[^\{\}]+(\\N){0,1}[^\{\}]*\}[^\{\}]+(\\N){0,1}[^\{\}\\]*",ta.text) for ta in best_subtitle ]
-translate = [re.findall(r"\{[^{}]+\\?N?[^{}]*}[^{}]+\\?N?[^{}\\]*", ta.text) for ta in best_subtitle]
-translate = [item for row in translate for item in row]
+#translate = [re.findall(r"\{[^{}]+\\?N?[^{}]*}[^{}]+\\?N?[^{}\\]*", ta.text) for ta in best_subtitle]
+#translate = [item for row in translate for item in row]
+translate = []
 
 for sign in sign_group:
-    if not parameter["trans_sign"]:
-        best_subtitle += [sign]
-        continue
-    temp = sign.plaintext.replace("\n", "\\N")
-    tr = [ta for ta in translate if "{" + temp.replace(" ", "").lower() in ta.replace(" ", "").lower()]
-    if len(tr) > 0:
-        tr = tr[0]
-        trans = tr[tr.index("}") + 1:]
-        best_subtitle += [apply_sub(sign, trans)]
-    else:
-        best_subtitle += [sign]
+    best_subtitle += [sign]
 
 for comment in comment_group:
     best_subtitle += [comment]
@@ -816,10 +815,11 @@ best_subtitle = sorted(best_subtitle, key= lambda tq: (convert_actor(tq.name)["i
 
 for sub in range(len(best_subtitle)):
     ob = convert_actor(best_subtitle[sub].name)
-    ob = str(ob["oldname"])+"__"+str(ob["tag"])
-    ob = ob.replace("comment","")
-    ob = ob.rstrip("__")
-    ob = ob.lstrip("__")
+    ob = [str(ob["oldname"]), str(ob["tag"])]
+    ob = [o for o in ob if o not in ["comment",""]]
+    if len(ob)==2 and "sign" in ob:
+        ob.remove("sign")
+    ob = "-".join(ob)
     best_subtitle[sub].name = ob
 
 # Export
