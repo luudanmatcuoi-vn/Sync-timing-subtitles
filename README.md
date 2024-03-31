@@ -1,18 +1,20 @@
 # Sync-timing-subtitles 
 
-<br>--> Transfer Timing from other subtitles to ocr sub
+<br>--> Transfer timing from other subtitles to ocr sub
   
 ## Usages
-- Run it
-- Can Change parameters in config.ini
+- Change parameters `characters`,`Dictionaries` in config.ini
 - Can make your own SymSpell dictionary
-- 
-## Feature
-- Sync based audio using sushi if they from different version (eg. BD and TVs)
-- Spell check using SymSpell
-- Add ename dictionary to check names, locations.
+- Run it
+
+## Main Feature
+- Sync sub based audio using sushi (if it from different version eg. BD and TVs)
 - Auto-detect subtitles need combining or splitting
-- Add filter rules (many methods):
+- Find and print caution unexpected characters (eg. japanese in ocr sub)
+- Remove ocr lines got > 60% characters not in `characters` config.ini
+- Spell checker using SymSpell
+- Add ename dictionary to check names, locations
+- Add filter rules to fix common error ( can use many methods ):
   + Replace
   + Regular expression
   + Replace word
