@@ -14,29 +14,23 @@ from os.path import isfile, join, splitext
 import PySimpleGUI as sg
 from symspellpy import SymSpell, Verbosity
 
-sym_spell = SymSpell()
-
-dictionary_path = join("dictionaries", "vi_full.txt")
-sym_spell.load_dictionary(dictionary_path, 0, 1, encoding="utf8")
-dictionary_path = join("dictionaries", "romanji.txt")
-sym_spell.load_dictionary(dictionary_path, 0, 1, encoding="utf8")
-dictionary_path = join("dictionaries", "enamdict.txt")
-sym_spell.load_dictionary(dictionary_path, 0, 1, encoding="cp932")
-
-try:  
-    req = requests.get("https://anotepad.com/notes/ca7d4apf")
-    if "Allow" in req.text:
-        pass
-    else:
-        print("Too old to work :v ")
-        exit()
-except:
-    print("Too old to work :v ")
-    exit()
+# try:  
+#     req = requests.get("https://anotepad.com/notes/ca7d4apf")
+#     if "Allow" in req.text:
+#         pass
+#     else:
+#         print("Too old to work :v ")
+#         exit()
+# except:
+#     print("Too old to work :v ")
+#     exit()
 
 
 config = configparser.ConfigParser()
 config.read('config.ini', encoding = "utf8")
+
+# for key in config["Tooltip"]:
+#     config["Tooltip"][key] = config["Tooltip"][key].replace("\\n","\n")
 
 def get_para_from_recent(default = False):
     if default:
@@ -44,49 +38,72 @@ def get_para_from_recent(default = False):
     else:
         parameter = dict(config["Recent"])
     for k in parameter.keys():
-        if parameter[k] in ["True", "False"]:
-            parameter[k] = bool(parameter[k])
+        if parameter[k] == "True":
+            parameter[k] = True
+        elif parameter[k] == "False":
+            parameter[k] = False
         elif parameter[k].replace(".","").isdigit():
-            if "." not in parameter[k]:
-                parameter[k] = int(parameter[k])
+            if ".0" in parameter[k] or "." not in parameter[k]:
+                parameter[k] = int(float(parameter[k])//1)
             else:
                 parameter[k] = float(parameter[k])
     return parameter
 parameter = get_para_from_recent()
 
-# Define the window's contents
-layout = [[sg.Text("Timed sub: "), 
-           sg.Input(key="origin_sub_path", change_submits=True, expand_x=True, default_text=parameter["origin_sub_path"]),
-           sg.FileBrowse(key='origin_sub_path')],
-          [sg.Text("ocr sub: "),
-           sg.Input(key="ocr_sub_path", change_submits=True, expand_x=True, default_text=parameter["ocr_sub_path"]),
-           sg.FileBrowse(key='ocr_sub_path')],
+sym_spell = SymSpell()
 
-          [sg.Text("Audio/video of timed sub: "), sg.Input(key="origin_audio_path", change_submits=True, expand_x=True, default_text=parameter["origin_audio_path"]),
+for dic_name in config["Dictionaries"]["name"].split("|"):
+    dictionary_path = join("dictionaries", dic_name+".txt")
+    for enc in config["Dictionaries"]["encode"].split("|"):
+        try:
+            sym_spell.load_dictionary(dictionary_path, 0, 1, encoding=enc)
+            break
+        except:
+            pass
+
+# Define the window's contents ,tooltip = config["Tooltip"]["origin_sub_path"]
+layout = [[sg.Text("Timed sub: ",tooltip = config["Tooltip"]["origin_sub_path"]), 
+           sg.Input(key="origin_sub_path",tooltip = config["Tooltip"]["origin_sub_path"], change_submits=True, expand_x=True, default_text=parameter["origin_sub_path"]),
+           sg.FileBrowse(key='origin_sub_path',file_types=(("Subtitles", "*.ass"),("Subtitles", "*.srt")))],
+          [sg.Text("OCR sub: ",tooltip = config["Tooltip"]["ocr_sub_path"]),
+           sg.Input(key="ocr_sub_path",tooltip = config["Tooltip"]["ocr_sub_path"], change_submits=True, expand_x=True, default_text=parameter["ocr_sub_path"]),
+           sg.FileBrowse(key='ocr_sub_path',file_types=[("Subtitle files","*."+fo) for fo in ["ass","srt","ssa","vtt","sub","txt","tmp"] ])],
+          
+          [sg.Text("Audio/video of timed sub: ",tooltip = config["Tooltip"]["origin_audio_path"]), 
+           sg.Input(key="origin_audio_path",tooltip = config["Tooltip"]["origin_audio_path"], change_submits=True, expand_x=True, default_text=parameter["origin_audio_path"]),
            sg.FileBrowse(key='origin_audio_path')],
-          [sg.Text("Audio/video of ocr sub: "),
-           sg.Input(key="ocr_audio_path", change_submits=True, expand_x=True, default_text=parameter["ocr_audio_path"]),
+          [sg.Text("Audio/video of ocr sub: ",tooltip = config["Tooltip"]["ocr_audio_path"]),
+           sg.Input(key="ocr_audio_path",tooltip = config["Tooltip"]["ocr_audio_path"], change_submits=True, expand_x=True, default_text=parameter["ocr_audio_path"]),
            sg.FileBrowse(key='ocr_audio_path')],
-          [sg.Text("Output: "), sg.Input(key="output_filename", expand_x=True, default_text=parameter["output_filename"])],
-          # [sg.Input(key='INPUT')],
-          [sg.Checkbox(text="Using sushi auto sync sub based on audio: ", key="is_using_sushi", enable_events=True, default=parameter["is_using_sushi"])],
-          [sg.Checkbox(text="Comment from_eng sub", key="comment_eng_sub", default=parameter["comment_eng_sub"])],
-          [sg.Checkbox(text="Comment from_ocr sub", key="comment_ocr_sub", default=parameter["comment_ocr_sub"])],
-          [sg.Checkbox(text="Try translate sign", key="trans_sign", default=False, visible=False)],
-          [sg.Text("same_rate: "), sg.Spin([ig / 100 for ig in range(101)], parameter["same_rate"], key="same_rate", size=(20, 1))],
-          [sg.Text("distance_string_rate: "),
+          
+          [sg.Text("Output: ",tooltip = config["Tooltip"]["output_filename"]),
+           sg.Input(key="output_filename", expand_x=True, default_text=parameter["output_filename"])],
+
+
+          [sg.Checkbox(text="Using sushi auto sync based on audio",tooltip = config["Tooltip"]["is_using_sushi"], key="is_using_sushi", enable_events=True, default=parameter["is_using_sushi"])],
+          [sg.Checkbox(text="Using spell checker",tooltip = config["Tooltip"]["is_spell_checker"], key="is_spell_checker", default=parameter["is_spell_checker"])],
+          
+          [sg.Checkbox(text="Comment from_eng sub",tooltip = config["Tooltip"]["comment_eng_sub"], key="comment_eng_sub", default=parameter["comment_eng_sub"])],
+          [sg.Checkbox(text="Comment from_ocr sub",tooltip = config["Tooltip"]["comment_ocr_sub"], key="comment_ocr_sub", default=parameter["comment_ocr_sub"])],
+          
+          [sg.Text("same_rate: ",tooltip= config["Tooltip"]["same_rate"]), 
+           sg.Spin([ig / 100 for ig in range(101)], parameter["same_rate"], key="same_rate", size=(20, 1))],
+          [sg.Text("distance_string_rate: ",tooltip=config["Tooltip"]["distance_string_rate"]),
            sg.Spin([ig / 100 for ig in range(101)], parameter["distance_string_rate"], key="distance_string_rate",size=(20, 1))],
-          [sg.Text("distance_string_character: "),
+          [sg.Text("distance_string_character: ",tooltip=config["Tooltip"]["distance_string_character"]),
            sg.Spin([ig for ig in range(10)], parameter["distance_string_character"], key="distance_string_character",size=(20, 1))],
-          [sg.Text("framerate: "), sg.Input(key="framerate", size=(20, 1), default_text=parameter["framerate"])],
-          [sg.Text("frame_distance: "),
+          
+          [sg.Text("framerate: ",tooltip = config["Tooltip"]["framerate"]), sg.Input(key="framerate", size=(20, 1), default_text=parameter["framerate"])],
+          [sg.Text("frame_distance: ",tooltip = config["Tooltip"]["frame_distance"]),
            sg.Spin([ig for ig in range(10)], parameter["frame_distance"], key="frame_distance", size=(20, 1))],
-          # [sg.Text("same_rate: "), sg.Input(key="same_rate", expand_x=True, default_text = parameter["same_rate"])],
-          [sg.Text(size=(40, 1), key='log'),sg.Checkbox(text="quit_split_line_section",key="quit_split_line_section", default=False,visible=False)],
+          
+          [sg.Text(size=(40, 1), key='log'),sg.Checkbox(text="quit_split_line_section",key="quit_split_line_section", default=False,visible=False),
+           sg.Checkbox(text="Try translate sign", key="trans_sign", default=False, visible=False)],
+          
           [sg.Button('Reset setting'), sg.Push(), sg.Button('Ok', size=(20, 1)), sg.Button('Quit')]]
 
 # Create the window
-window = sg.Window('Transfer timing subtitles by luudanmatcuoi v1.2.1', layout,icon='dango.ico')
+window = sg.Window('Transfer timing subtitles by luudanmatcuoi v1.2.2', layout,icon='dango.ico')
 
 # Display and interact with the Window using an Event Loop
 while True:
@@ -292,7 +309,8 @@ def split_sub(a_group, b_group):
         return [{"text":soww,"splited":True,"count":count_split_symbol(soww)} for soww in sow]
 
     split = [{"text":b_group[t].text,"splited":False,"count":count_split_symbol(b_group[t].text)} for t in range(len(b_group))]
-    while True:
+
+    while len(split) < len(a_group):
         need_split = [s for s in split if not s["splited"]]
         if len(need_split)>0:
             need_split = max(need_split, key = lambda p : p["count"])
@@ -301,8 +319,6 @@ def split_sub(a_group, b_group):
         else:
             break
 
-        if len(split) >= len(a_group):
-            break
     split = [s["text"] for s in split]
 
     b_group = split + [""] * ( len(a_group) - len(split) )
@@ -466,9 +482,9 @@ def convert_actor(va):
 ### Sushi to sync sub by audio
 if parameter["is_using_sushi"]:
     system(
-        'sushi.exe --src "{ocr_audio_path}" --dst "{origin_audio_path}" --script "{ocr_sub_path}" -o ocr_sushi.srt'.format(
-            **parameter))
-    ocr_sub_sushi_path = "ocr_sushi.srt"
+        'sushi.exe --src "{ocr_audio_path}" --dst "{origin_audio_path}" --script "{ocr_sub_path}" -o ocr_sushi.'
+        .format(  **parameter) + parameter["ocr_sub_path"][-3:])
+    ocr_sub_sushi_path = "ocr_sushi."+ocr_sub_path[-3:]
 else:
     ocr_sub_sushi_path = parameter["ocr_sub_path"]
 
@@ -567,70 +583,71 @@ while i_ocr < len(ocr_sub):
         i_ocr += 1
 
 ###Block phát hiện và sửa lỗi chính tả.
-line_need_correction = []
-for i_ocr in range(len(ocr_sub)):
-    # Chia thành các mảng
-    temp = re.findall(
-        r"|[^\s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]+|[ \s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]",
-        ocr_sub[i_ocr].text.replace("\\N", "\n"))
-    for t in range(len(temp)):
-        # Lọc các word có 1 ký tự
-        tpattern = r'[a-zA-Z0-9\s!\"#$%&\'()*+,\-./:;<=>?@\[\]^_`\{\|\}\\~'+re.escape(list_characters)+r"]"
-        if len(temp[t]) == 1 and re.search( tpattern , temp[t]):
-            # Các word 1 ký tự là dấu câu hoặc số
-            if re.search(
-                    r"[\s()\"!,\-.;?_~a-zA-Z0-9%s]" % re.escape(list_characters),
-                    temp[t]):
-                temp[t] = [temp[t], True]
+if parameter["is_spell_checker"]:
+    line_need_correction = []
+    for i_ocr in range(len(ocr_sub)):
+        # Chia thành các mảng
+        temp = re.findall(
+            r"|[^\s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]+|[ \s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]",
+            ocr_sub[i_ocr].text.replace("\\N", "\n"))
+        for t in range(len(temp)):
+            # Lọc các word có 1 ký tự
+            tpattern = r'[a-zA-Z0-9\s!\"#$%&\'()*+,\-./:;<=>?@\[\]^_`\{\|\}\\~'+re.escape(list_characters)+r"]"
+            if len(temp[t]) == 1 and re.search( tpattern , temp[t]):
+                # Các word 1 ký tự là dấu câu hoặc số
+                if re.search(
+                        r"[\s()\"!,\-.;?_~a-zA-Z0-9%s]" % re.escape(list_characters),
+                        temp[t]):
+                    temp[t] = [temp[t], True]
+                else:
+                    temp[t] = [temp[t], False]
             else:
-                temp[t] = [temp[t], False]
-        else:
-            sug = check_spelling(temp[t])
-            temp[t] = sug
+                sug = check_spelling(temp[t])
+                temp[t] = sug
 
-    temp_res = len(temp) - sum([int(g[1]) for g in temp])
-    if temp_res > 0:
-        line_need_correction += [[i_ocr, temp, ocr_sub[i_ocr].text]]
+        temp_res = len(temp) - sum([int(g[1]) for g in temp])
+        if temp_res > 0:
+            line_need_correction += [[i_ocr, temp, ocr_sub[i_ocr].text]]
 
 
-spelling_layout = [[sg.Push(), sg.Text('Double check pls...'), sg.Push()],
-                   [sg.Multiline(key=f"spelling", size=(70, 20), default_text="")],
-                   [sg.Push(), sg.Button('Ok'), sg.Button('Quit'), sg.Push()]]
+    spelling_layout = [[sg.Push(), sg.Text('Double check pls...'), sg.Push()],
+                       [sg.Multiline(key=f"spelling", size=(70, 20), default_text="")],
+                       [sg.Push(), sg.Button('Ok'), sg.Button('Cancel change'), sg.Push()]]
 
-spelling_window = sg.Window('Spelling check', spelling_layout, finalize=True)
-spelling_window.bind("<Escape>", "ESCAPE")
+    spelling_window = sg.Window('Spelling check', spelling_layout, finalize=True)
+    spelling_window.bind("<Escape>", "ESCAPE")
 
-for lin in line_need_correction:
-    spelling_window['spelling'].print(f"[{lin[0]}]", end='', text_color='black')
-    spelling_window['spelling'].print('\n', end='')
-    spelling_window['spelling'].print(f"[{lin[2]}]", end='', text_color='grey60')
-    spelling_window['spelling'].print('\n', end='')
-    for sp in lin[1]:
-        if sp[1]:
-            spelling_window['spelling'].print(sp[0], end='', text_color='black')
-        else:
-            spelling_window['spelling'].print(sp[0], end='', text_color='red')
-    spelling_window['spelling'].print('\n\n', end='')
-
-while True:
-    event, values = spelling_window.read()
-    # See if user wants to quit or window was closed
-    if event in (sg.WINDOW_CLOSED, "ESCAPE", "Quit"):
-        spelling_window.close()
-        break
-    if event == "Ok":
-        data_spelling = values[f"spelling"].replace("\r", "")
-        data_spelling = re.findall(r"\[([0-9]+)](\n\[[^]\[]+])?\n([^\[\]]+)", data_spelling + "\n\n")
-
-        for da in data_spelling:
-            temp_da = [dq for dq in da if "[" not in dq and "]" not in dq and dq != "\n"]
-            if len(temp_da) == 0:
-                temp_da = ""
+    for lin in line_need_correction:
+        spelling_window['spelling'].print(f"[{lin[0]}]", end='', text_color='black')
+        spelling_window['spelling'].print('\n', end='')
+        spelling_window['spelling'].print(f"[{lin[2]}]", end='', text_color='grey60')
+        spelling_window['spelling'].print('\n', end='')
+        for sp in lin[1]:
+            if sp[1]:
+                spelling_window['spelling'].print(sp[0], end='', text_color='black')
             else:
-                temp_da = max(temp_da, key=len)
-            ocr_sub[int(da[0])].text = temp_da.lstrip().rstrip().replace("\n", "\\N")
-        spelling_window.close()
-        break
+                spelling_window['spelling'].print(sp[0], end='', text_color='red')
+        spelling_window['spelling'].print('\n\n', end='')
+
+    while True:
+        event, values = spelling_window.read()
+        # See if user wants to quit or window was closed
+        if event in (sg.WINDOW_CLOSED, "ESCAPE", "Cancel change"):
+            spelling_window.close()
+            break
+        if event == "Ok":
+            data_spelling = values[f"spelling"].replace("\r", "")
+            data_spelling = re.findall(r"\[([0-9]+)](\n\[[^]\[]+])?\n([^\[\]]+)", data_spelling + "\n\n")
+
+            for da in data_spelling:
+                temp_da = [dq for dq in da if "[" not in dq and "]" not in dq and dq != "\n"]
+                if len(temp_da) == 0:
+                    temp_da = ""
+                else:
+                    temp_da = max(temp_da, key=len)
+                ocr_sub[int(da[0])].text = temp_da.lstrip().rstrip().replace("\n", "\\N")
+            spelling_window.close()
+            break
 
 i_ocr = 0
 while i_ocr < len(ocr_sub):
@@ -638,7 +655,6 @@ while i_ocr < len(ocr_sub):
         del ocr_sub[i_ocr]
     else:
         i_ocr += 1
-
 
 
 
