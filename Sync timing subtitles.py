@@ -83,9 +83,9 @@ layout = [[sg.Text("Timed sub: ",tooltip = config["Tooltip"]["origin_sub_path"])
           [sg.Checkbox(text="Using sushi auto sync based on audio",tooltip = config["Tooltip"]["is_using_sushi"], key="is_using_sushi", enable_events=True, default=parameter["is_using_sushi"])],
           [sg.Checkbox(text="Using spell checker",tooltip = config["Tooltip"]["is_spell_checker"], key="is_spell_checker", default=parameter["is_spell_checker"])],
           
-          [sg.Checkbox(text="Comment from_eng sub",tooltip = config["Tooltip"]["comment_eng_sub"], key="comment_eng_sub", default=parameter["comment_eng_sub"])],
+          [sg.Checkbox(text="Comment from_timed sub",tooltip = config["Tooltip"]["comment_timed_sub"], key="comment_timed_sub", default=parameter["comment_timed_sub"])],
           [sg.Checkbox(text="Comment from_ocr sub",tooltip = config["Tooltip"]["comment_ocr_sub"], key="comment_ocr_sub", default=parameter["comment_ocr_sub"])],
-          
+          [sg.Checkbox(text="Remove tags in ocr sub",tooltip = config["Tooltip"]["is_remove_tag"], key="is_remove_tag", default=parameter["is_remove_tag"])],
           [sg.Text("same_rate: ",tooltip= config["Tooltip"]["same_rate"]), 
            sg.Spin([ig / 100 for ig in range(101)], parameter["same_rate"], key="same_rate", size=(20, 1))],
           [sg.Text("distance_string_rate: ",tooltip=config["Tooltip"]["distance_string_rate"]),
@@ -103,7 +103,7 @@ layout = [[sg.Text("Timed sub: ",tooltip = config["Tooltip"]["origin_sub_path"])
           [sg.Button('Reset setting'), sg.Push(), sg.Button('Ok', size=(20, 1)), sg.Button('Quit')]]
 
 # Create the window
-window = sg.Window('Transfer timing subtitles by luudanmatcuoi v1.2.2', layout,icon='dango.ico')
+window = sg.Window('Transfer timing subtitles by luudanmatcuoi v1.2.3', layout,icon='dango.ico')
 
 # Display and interact with the Window using an Event Loop
 while True:
@@ -248,12 +248,17 @@ def is_continue_time(a, b):
 
 
 def apply_sub(a_line, text):
+    # Change all type to a_line:ssa_line ; text:string
     if type(a_line) == type([]) and len(a_line) == 1:
         a_line = a_line[0]
     if type(text) != type("") and type(text) != type([]):
         text = text.text
     elif type(text) == type([]) and len(text) == 1:
         text = text[0].text
+    # Handle \n \\N \\n
+    text = text.replace("\n","\\N")
+    text = text.replace("\\n","\\N")
+    # throw all aegisub tag {} -> [] in a_line
     temp = re.sub(r"\{([^\\]+)}", r"[\1]", a_line.text)
 
     match = re.findall(r"(({[^{}]+})?([^{}]+)?({[^{}]+})?)+", temp)
@@ -262,8 +267,10 @@ def apply_sub(a_line, text):
         for m in t:
             if m == "":
                 pass
+            # If aegisub tag in match -> add to temp
             elif "{" in m:
                 temp += m
+            # If aegisub tag not in match (aka timed sub) -> comment it {} and add to temp
             elif "{" not in m:
                 if parameter["apply_mode"] == "comment":
                     temp += "{" + m + "}"
@@ -284,10 +291,13 @@ def combine_sub(a_group, b_group):
             del b_group[i + 1]
         else:
             i += 1
-
-    # Combine nếu sub gốc có \\N -> Ghép vào cx \\N nếu không ghép bằng dấu cách
+    # If a_line got \\N -> combine with \\N. Else combine with space
     if "\\N" in a_group[0].text and len(b_group) > 1:
-        b_group[0].text = "\\N".join([t.plaintext for t in b_group])
+        def clear_newline(stri):
+            stri = re.sub(r"( )*\n( )*"," ",stri)
+            stri = re.sub(r"( )*\\N( )*"," ",stri)
+            return stri
+        b_group[0].text = "\\N".join([clear_newline(t.plaintext) for t in b_group])
         b_group = [b_group[0]]
     elif "\\N" not in a_group[0].text and len(b_group) > 1:
         b_group[0].text = " ".join([t.plaintext for t in b_group])
@@ -327,7 +337,7 @@ def split_sub(a_group, b_group):
     for q in range(len(a_group)):
         a_group[q].name = a_group[q].name+"__tag:split"
 
-    if parameter["quit_split_line_section"]:
+    if parameter["quit_split_line_section"] and len(a_group) >= len(b_group):
         for blablo in range(len(a_group)):
             a_group[blablo] = apply_sub(a_group[blablo], b_group[blablo])
         return a_group
@@ -342,10 +352,10 @@ def split_sub(a_group, b_group):
                                                            size=(text_width, len(b_group[t]) // text_width + 2),
                                                            default_text=b_group[t])] for t in range(len(b_group))]
     split_layout = [[sg.Column(a_group_list), sg.VSeperator(), sg.Column(b_group_list), ],
-                    [sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
+                    [sg.Text("(Tags will auto transfer to ocr_sub)"),sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
                      sg.Button('Copy timed_sub')],
-                    [sg.Push(), sg.Push(), sg.Push(), sg.Button('Ok'), sg.Button('Cancel'), sg.Push(), sg.Push(),
-                     sg.Button('Quit section')]
+                    [sg.Push(), sg.Push(), sg.Push(), sg.Button('Ok'), sg.Button('Cancel change'), sg.Push(),
+                     sg.Button('Quit section + Apply all')]
                     ]
     split_window = sg.Window('Transfer timing subtitle by luudanmatcuoi', split_layout, finalize=True)
     split_window.bind("<Escape>", "ESCAPE")
@@ -353,10 +363,10 @@ def split_sub(a_group, b_group):
     while True:
         event, values = split_window.read()
         # See if user wants to quit or window was closed
-        if event in (sg.WINDOW_CLOSED, "ESCAPE", "Cancel"):
+        if event in (sg.WINDOW_CLOSED, "ESCAPE", "Cancel change"):
             split_window.close()
             return a_group
-        if event == "Quit section":
+        if event == "Quit section + Apply all":
             parameter["quit_split_line_section"] = True
             split_window.close()
             for g in range(len(a_group)):
@@ -484,7 +494,7 @@ if parameter["is_using_sushi"]:
     system(
         'sushi.exe --src "{ocr_audio_path}" --dst "{origin_audio_path}" --script "{ocr_sub_path}" -o ocr_sushi.'
         .format(  **parameter) + parameter["ocr_sub_path"][-3:])
-    ocr_sub_sushi_path = "ocr_sushi."+ocr_sub_path[-3:]
+    ocr_sub_sushi_path = "ocr_sushi."+parameter["ocr_sub_path"][-3:]
 else:
     ocr_sub_sushi_path = parameter["ocr_sub_path"]
 
@@ -527,13 +537,20 @@ if len(layer_eng_sub)>0:
 else:
     layer_eng_sub = 0
 
-# Filter sub ocr : Loại bỏ sub trống, filter chính tả, cảnh báo các ký tự lạ
+# Filter sub ocr : Remove empty lines, filter rules (find and replace), Caution unexpected characters
 f = open('filter_rules.txt', "r", encoding="utf8")
 rules = [g.replace("\\n", "\\\\N") for g in f.read().split("\n") if len(g) > 0]
 rules = [g.split("________") for g in rules if "#" not in g[0]]
 f.close()
 i_ocr = 0
 while i_ocr < len(ocr_sub):
+    # Remove tags in ocr_sub
+    if parameter["is_remove_tag"]:
+        if any(["\\" + tag + "(" in ocr_sub[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
+            del ocr_sub[i_ocr]
+            continue
+        ocr_sub[i_ocr].text = re.sub(r"\{[^\{\\\}]*\\[^\{\}]+\}","",ocr_sub[i_ocr].text)
+
     for r in rules:
         if r[0] == "replace":
             if "\\u" in r[1]:
@@ -553,14 +570,15 @@ while i_ocr < len(ocr_sub):
             if "[END_UL]" in ocr_sub[i_ocr].text:
                 ocr_sub[i_ocr].text = re.sub(r"\[UPPER\]([^\[]*)\[END_UL\]", lambda m: f"{m.group(1).upper()}", ocr_sub[i_ocr].text)
                 ocr_sub[i_ocr].text = re.sub(r"\[LOWER\]([^\[]*)\[END_UL\]", lambda m: f"{m.group(1).lower()}", ocr_sub[i_ocr].text)
-    # Print cảnh báo các ký tự lạ
+
+    # Print Caution unexpected characters
     match = re.findall(
         r"[^0-9a-zA-Z\s\W%s]" % list_characters,
         ocr_sub[i_ocr].text)
     if len(match) > 0 and "OCR_EMPTY_RESULT" not in ocr_sub[i_ocr].text:
         print("Caution unexpected characters:\t" + " ".join(match) + "\t" + ocr_sub[i_ocr].text)
 
-    # Loại bỏ các line có 60-90% là các ký tự lạ
+    # Remove lines got 60-90% unexpected characters. or line is_comment
     tempa = ocr_sub[i_ocr].text.split("\\N")
     tempb = "dfasdfaergsergdzf".join(tempa).split("dfasdfaergsergdzf")
     for t in range(len(tempa)):
@@ -570,7 +588,7 @@ while i_ocr < len(ocr_sub):
         if len(ga) < len(gb) * (1 - 60 / 100):
             tempb[t] = ""
     tempb = list(filter(None, tempb))
-    if len(tempb) == 0:
+    if len(tempb) == 0 or ocr_sub[i_ocr].is_comment:
         del ocr_sub[i_ocr]
         continue
     ocr_sub[i_ocr].text = "\\N".join(tempb)
@@ -582,7 +600,7 @@ while i_ocr < len(ocr_sub):
     else:
         i_ocr += 1
 
-###Block phát hiện và sửa lỗi chính tả.
+###Block detect and fix spell checker
 if parameter["is_spell_checker"]:
     line_need_correction = []
     for i_ocr in range(len(ocr_sub)):
@@ -774,8 +792,8 @@ while i_group < len(group):
 
     if len(b) == 0:
         for i_s in range(len(a)):
-            a[i_s].name = a[i_s].name+"__tag:from_eng"
-        if parameter["comment_eng_sub"]:
+            a[i_s].name = a[i_s].name+"__tag:from_timed"
+        if parameter["comment_timed_sub"]:
             best_subtitle += [apply_sub(tg, "") for tg in a]
         else:
             best_subtitle += a
@@ -795,20 +813,20 @@ i_s = 0
 while True:
     try:
         if "tag:from_" not in best_subtitle[i_s].name \
-        and "tag:from_eng" in best_subtitle[i_s+1].name \
+        and "tag:from_timed" in best_subtitle[i_s+1].name \
         and "tag:from_ocr" in best_subtitle[i_s+2].name \
         and "tag:from_" not in best_subtitle[i_s+3].name:
             best_subtitle[i_s+1] = apply_sub(best_subtitle[i_s+1], best_subtitle[i_s+2])
             best_subtitle[i_s+1].text = best_subtitle[i_s+1].text.replace("{[","{").replace("]}","}")
-            best_subtitle[i_s+1].name = best_subtitle[i_s+1].name.replace("tag:from_eng","tag:")
+            best_subtitle[i_s+1].name = best_subtitle[i_s+1].name.replace("tag:from_timed","tag:")
             del best_subtitle[i_s+2]
         elif "tag:from_" not in best_subtitle[i_s].name \
         and "tag:from_ocr" in best_subtitle[i_s+1].name \
-        and "tag:from_eng" in best_subtitle[i_s+2].name \
+        and "tag:from_timed" in best_subtitle[i_s+2].name \
         and "tag:from_" not in best_subtitle[i_s+3].name:
             best_subtitle[i_s+2] = apply_sub(best_subtitle[i_s+2], best_subtitle[i_s+1])
             best_subtitle[i_s+2].text = best_subtitle[i_s+2].text.replace("{[","{").replace("]}","}")
-            best_subtitle[i_s+2].name = best_subtitle[i_s+2].name.replace("tag:from_eng","tag:")
+            best_subtitle[i_s+2].name = best_subtitle[i_s+2].name.replace("tag:from_timed","tag:")
             del best_subtitle[i_s+1]
         else:
             i_s+=1
@@ -826,7 +844,7 @@ for sign in sign_group:
 for comment in comment_group:
     best_subtitle += [comment]
 
-#Sắp xếp best_subtitle theo đúng ids:
+#Sord best_subtitle follow ids (remain order after do xyz stuff): 
 best_subtitle = sorted(best_subtitle, key= lambda tq: (convert_actor(tq.name)["id"], tq.start, tq.end ), reverse=False)
 
 for sub in range(len(best_subtitle)):
@@ -848,7 +866,7 @@ for b in best_subtitle:
 
 write_sub.save(parameter["output_filename"])
 
-print("done")
+print("DONE :v")
 
 window.close()
 system("pause")
