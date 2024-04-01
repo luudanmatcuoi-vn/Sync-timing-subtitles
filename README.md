@@ -1,6 +1,8 @@
 # Sync-timing-subtitles 
 
-<br>--> Transfer timing from other subtitles to ocr sub
+<br>--> Transfer timing from timed subtitle to ocr_sub (softsub) or any softsub.
+
+<br> This tool calculates same time between 2 lines and link them.
   
 ## Usages
 - Change parameters `characters`,`Dictionaries` in config.ini
