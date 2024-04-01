@@ -14,7 +14,7 @@ from os.path import isfile, join, splitext
 import PySimpleGUI as sg
 from symspellpy import SymSpell, Verbosity
 
-# try:  
+# try:
 #     req = requests.get("https://anotepad.com/notes/ca7d4apf")
 #     if "Allow" in req.text:
 #         pass
@@ -70,10 +70,16 @@ layout = [[sg.Text("Timed sub: ",tooltip = config["Tooltip"]["origin_sub_path"])
            sg.FileBrowse(key='ocr_sub_path',file_types=[("Subtitle files","*."+fo) for fo in ["ass","srt","ssa","vtt","sub","txt","tmp"] ])],
           
           [sg.Text("Audio/video of timed sub: ",tooltip = config["Tooltip"]["origin_audio_path"]), 
-           sg.Input(key="origin_audio_path",tooltip = config["Tooltip"]["origin_audio_path"], change_submits=True, expand_x=True, default_text=parameter["origin_audio_path"]),
+           sg.Input(key="origin_audio_path",tooltip = config["Tooltip"]["origin_audio_path"], 
+                change_submits=True, expand_x=True, default_text=parameter["origin_audio_path"],
+                text_color= (lambda x: "black" if x else "grey60")(parameter["is_using_sushi"]),
+                disabled = (lambda x: False if x else True ) (parameter["is_using_sushi"])),
            sg.FileBrowse(key='origin_audio_path')],
           [sg.Text("Audio/video of ocr sub: ",tooltip = config["Tooltip"]["ocr_audio_path"]),
-           sg.Input(key="ocr_audio_path",tooltip = config["Tooltip"]["ocr_audio_path"], change_submits=True, expand_x=True, default_text=parameter["ocr_audio_path"]),
+           sg.Input(key="ocr_audio_path",tooltip = config["Tooltip"]["ocr_audio_path"], 
+                change_submits=True, expand_x=True, default_text=parameter["ocr_audio_path"],
+                text_color= (lambda x: "black" if x else "grey60")(parameter["is_using_sushi"]),
+                disabled = (lambda x: False if x else True ) (parameter["is_using_sushi"])),
            sg.FileBrowse(key='ocr_audio_path')],
           
           [sg.Text("Output: ",tooltip = config["Tooltip"]["output_filename"]),
@@ -331,6 +337,14 @@ def split_sub(a_group, b_group):
 
     split = [s["text"] for s in split]
 
+    # Remove phrase in split that duplicate
+    split = [t.split("\\N") for t in split]
+    for g in range(len(split)):
+        for q in split[g]:
+            if q in [bla for qa in split[:g] for bla in qa ] and len(split[g])>1:
+                split[g].remove(q)
+    split = ["\\N".join(t) for t in split]
+
     b_group = split + [""] * ( len(a_group) - len(split) )
 
     # Gán tag:split vào a_group
@@ -352,7 +366,7 @@ def split_sub(a_group, b_group):
                                                            size=(text_width, len(b_group[t]) // text_width + 2),
                                                            default_text=b_group[t])] for t in range(len(b_group))]
     split_layout = [[sg.Column(a_group_list), sg.VSeperator(), sg.Column(b_group_list), ],
-                    [sg.Text("(Tags will auto transfer to ocr_sub)"),sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
+                    [sg.Text("(Ae tags will auto transfer)"),sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
                      sg.Button('Copy timed_sub')],
                     [sg.Push(), sg.Push(), sg.Push(), sg.Button('Ok'), sg.Button('Cancel change'), sg.Push(),
                      sg.Button('Quit section + Apply all')]
@@ -420,6 +434,7 @@ def split_sub(a_group, b_group):
                 except:
                     break
         if event == "Ok":
+            # Get data from GUI
             e = 0
             a_group_result = []
             while f"a_group_{e}" in values.keys():
@@ -435,6 +450,8 @@ def split_sub(a_group, b_group):
                     if "\n" == temp[-1]: temp = temp[:-1]
                 b_group_result += [temp]
                 e += 1
+            # Remove all tags in b_group_result
+            b_group_result = [re.sub(r"\{[^\{\\\}]*\\[^\{\}]+\}","",ga) for ga in b_group_result ]
 
             for i in range(len(a_group_result)):
                 a_group[i] = apply_sub(a_group[i], b_group_result[i])
@@ -751,7 +768,9 @@ while i_group < len(group):
                 b += [group[temp_i]["ocr"]]
                 has_group_add = True
             elif (group[temp_i]["eng"] != a[gia] and group[temp_i]["ocr"] == b[gia] ) or \
-                    is_same_time(group[i_group]["eng"],group[temp_i]["eng"]) :
+                    is_same_time(group[i_group]["eng"],group[temp_i]["eng"]) or \
+                    cal_same_time(group[temp_i]["ocr"],b[gia]) > duration(group[temp_i]["ocr"])*parameter["same_rate"] or \
+                    cal_same_time(group[temp_i]["ocr"],b[gia]) > duration(b[gia])*parameter["same_rate"] :
                 a += [group[temp_i]["eng"]]
                 b += [group[temp_i]["ocr"]]
                 has_group_add = True
