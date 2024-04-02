@@ -252,6 +252,8 @@ def is_continue_time(a, b):
     else:
         False
 
+def flat_line(l):
+    return f"l_{str(l.layer)}_s_{str(l.start)}_e_{str(l.end)}_c_{str(l.is_comment)}_s_{str(l.style)}_n_{str(l.name)}_t_{str(l.text)}"
 
 def apply_sub(a_line, text):
     # Change all type to a_line:ssa_line ; text:string
@@ -559,6 +561,17 @@ f = open('filter_rules.txt', "r", encoding="utf8")
 rules = [g.replace("\\n", "\\\\N") for g in f.read().split("\n") if len(g) > 0]
 rules = [g.split("________") for g in rules if "#" not in g[0]]
 f.close()
+
+# Check if characters parameter in config.ini is right
+tempa = "".join([t.text for t in ocr_sub ]).replace(" ","").replace("\\N","").replace("\n","")
+tempb = tempa
+tempa = re.sub(  r"[^0-9a-zA-Z\s\W%s]" % re.escape(list_characters) , "", tempa)
+if len(tempa) < len(tempb) * (1 - 20 / 100):
+    print("Please fill all characters of your language in 'characters' config.ini\n(without A-Z a-z 0-9 or punctuation)")
+    is_remove_lines_unexpected = False
+else:
+    is_remove_lines_unexpected = True
+
 i_ocr = 0
 while i_ocr < len(ocr_sub):
     # Remove tags in ocr_sub
@@ -592,7 +605,7 @@ while i_ocr < len(ocr_sub):
     match = re.findall(
         r"[^0-9a-zA-Z\s\W%s]" % list_characters,
         ocr_sub[i_ocr].text)
-    if len(match) > 0 and "OCR_EMPTY_RESULT" not in ocr_sub[i_ocr].text:
+    if len(match) > 0 and "OCR_EMPTY_RESULT" not in ocr_sub[i_ocr].text and is_remove_lines_unexpected :
         print("Caution unexpected characters:\t" + " ".join(match) + "\t" + ocr_sub[i_ocr].text)
 
     # Remove lines got 60-90% unexpected characters. or line is_comment
@@ -602,7 +615,7 @@ while i_ocr < len(ocr_sub):
         tempa[t] = re.sub(  r"[^0-9a-zA-Z\s\W%s]" % re.escape(list_characters) , "", tempa[t])
         ga = tempa[t].replace(" ", "")
         gb = tempb[t].replace(" ", "")
-        if len(ga) < len(gb) * (1 - 60 / 100):
+        if len(ga) < len(gb) * (1 - 60 / 100) and is_remove_lines_unexpected:
             tempb[t] = ""
     tempb = list(filter(None, tempb))
     if len(tempb) == 0 or ocr_sub[i_ocr].is_comment:
@@ -778,9 +791,6 @@ while i_group < len(group):
             break
 
         following += 1
-
-    def flat_line(l):
-        return f"l_{str(l.layer)}_s_{str(l.start)}_e_{str(l.end)}_c_{str(l.is_comment)}_s_{str(l.style)}_n_{str(l.name)}_t_{str(l.text)}"
 
     g = 0
     while g<len(a):
