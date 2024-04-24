@@ -15,7 +15,7 @@ import PySimpleGUI as sg
 from symspellpy import SymSpell, Verbosity
 
 # try:
-#     req = requests.get("https://anotepad.com/notes/ca7d4apf")
+#     req = requests.get("https://gist.github.com/luudanmatcuoi-vn/208833abf603e417efe1e6ccbb1be4f3")
 #     if "Allow" in req.text:
 #         pass
 #     else:
@@ -164,6 +164,18 @@ while True:
         with open('config.ini', 'w', encoding = "utf8") as configfile:
             config.write(configfile)
 
+        parameter["color"] = parameter["color"].split("__")
+
+        # Check if output file output already exist
+        if isfile(parameter["output_filename"]):
+            double_check = sg.popup_yes_no("The "+parameter["output_filename"].split("\\")[0]+" file already exists. \nDo you want to overwrite it?",  title="Overwrite output file")
+            if double_check=="No" or double_check==None:
+                continue
+            else:
+                pass
+        else:
+            pass
+
         if isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and not parameter[
             "is_using_sushi"] or (isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and
                                   isfile(parameter["origin_audio_path"]) and isfile(parameter["ocr_audio_path"])):
@@ -252,8 +264,36 @@ def is_continue_time(a, b):
     else:
         False
 
+def clean_inline_comment(stri):
+    stri = stri.replace("\\N","[")
+    stri = re.sub(r"\{[^\\\{\}]+\}","",stri)
+    return stri.replace("[","\\N")
+
 def flat_line(l):
     return f"l_{str(l.layer)}_s_{str(l.start)}_e_{str(l.end)}_c_{str(l.is_comment)}_s_{str(l.style)}_n_{str(l.name)}_t_{str(l.text)}"
+
+def normalized_time_data(group):
+    start = min([g["start"] for g in group])
+    end = max([g["end"] for g in group])
+    le = abs(end-start)
+    graph = group
+    for g in range(len(graph)):
+        graph[g]["start_nom"] = int((graph[g]["start"] - start)/le*100//1)
+        graph[g]["end_nom"] = int((graph[g]["end"] - start)/le*100//1)
+        graph[g]["color"] = parameter["color"][g%4]
+        graph[g]["level"] = 0
+
+    for g in range(len(graph)):
+        while True:
+            same_level = [graph[ga] for ga in range(g) if graph[ga]["level"] == graph[g]["level"]]
+            if any([ ( abs(sa["start"]-sa["end"]) + abs(graph[g]["start"]-graph[g]["end"]) - 
+                abs(sa["start"]-graph[g]["start"]) -abs(sa["end"]-graph[g]["end"]) ) > 2 for sa in same_level ]):
+                graph[g]["level"] +=1
+            else:
+                break
+
+    return graph
+
 
 def apply_sub(a_line, text):
     # Change all type to a_line:ssa_line ; text:string
@@ -323,10 +363,15 @@ def split_sub(a_group, b_group):
     def count_split_symbol(stri):
         return sum([stri.count(gt) for gt in parameter["punctuation"]])
     def split_line_dict(sow):
-        sow = split_line(sow["text"])
-        return [{"text":soww,"splited":True,"count":count_split_symbol(soww)} for soww in sow]
+        kwow = split_line(sow["text"])
+        return [{"text":kwows,"splited":True,
+                 "start": sow["start"], "end": sow["end"],
+                 "count":count_split_symbol(kwows)} for kwows in kwow]
 
-    split = [{"text":b_group[t].text,"splited":False,"count":count_split_symbol(b_group[t].text)} for t in range(len(b_group))]
+    split = [{"text":clean_inline_comment(b_group[t].text), "splited":False,
+             "count":count_split_symbol(b_group[t].text),
+             "start": b_group[t].start, 
+             "end": b_group[t].end  } for t in range(len(b_group))]
 
     while len(split) < len(a_group):
         need_split = [s for s in split if not s["splited"]]
@@ -337,44 +382,65 @@ def split_sub(a_group, b_group):
         else:
             break
 
-    split = [s["text"] for s in split]
+    # split = [s["text"] for s in split]
 
     # Remove phrase in split that duplicate
-    split = [t.split("\\N") for t in split]
-    for g in range(len(split)):
-        for q in split[g]:
-            if q in [bla for qa in split[:g] for bla in qa ] and len(split[g])>1:
-                split[g].remove(q)
-    split = ["\\N".join(t) for t in split]
+    tempsplit = [t["text"].split("\\N") for t in split]
+    for g in range(len(tempsplit)):
+        for q in tempsplit[g]:
+            if q in [bla for qa in tempsplit[:g] for bla in qa ] and len(tempsplit[g])>1:
+                tempsplit[g].remove(q)
+    tempsplit = ["\\N".join(t) for t in tempsplit]
+    for g in range(len(tempsplit)):
+        split[g]["text"] = tempsplit[g]
 
-    b_group = split + [""] * ( len(a_group) - len(split) )
+    b_group = split + [{"text":"", "splited":True, "count":0, "start": split[-1]["end"],  "end": split[-1]["end"]  }] * ( len(a_group) - len(split) )
 
     # Gán tag:split vào a_group
     for q in range(len(a_group)):
         a_group[q].name = a_group[q].name+"__tag:split"
 
+    # Check is quit_split_line_section enable
     if parameter["quit_split_line_section"] and len(a_group) >= len(b_group):
         for blablo in range(len(a_group)):
             a_group[blablo] = apply_sub(a_group[blablo], b_group[blablo])
         return a_group
 
+    #Prepare for graphic visualize
+    graph1 = normalized_time_data([{"text":ga.text,"start":ga.start,"end":ga.end} for ga in a_group])
+    max_graph_level_1 = max([ga["level"] for ga in graph1])
+    graph2 = normalized_time_data(b_group)
+    max_graph_level_2 = max([ga["level"] for ga in graph2])
+
     # Open window
     text_width = 45
     a_group_list = [[sg.Text("Timed sub")]] + [[sg.Multiline(key=f"a_group_{t}",
-                                                              size=(text_width, len(a_group[t].text) // text_width + 2),
-                                                              default_text=a_group[t].text, disabled=True)] for t in
+                                                  size=(text_width, len(a_group[t].text) // text_width + 2),
+                                                  sbar_background_color = parameter["color"][t%4],
+                                                  default_text=a_group[t].text, disabled=True, autoscroll = False)] for t in
                                                 range(len(a_group))]
     b_group_list = [[sg.Text("OCR sub")]] + [[sg.Multiline(key=f"b_group_{t}",
-                                                           size=(text_width, len(b_group[t]) // text_width + 2),
-                                                           default_text=b_group[t])] for t in range(len(b_group))]
-    split_layout = [[sg.Column(a_group_list), sg.VSeperator(), sg.Column(b_group_list), ],
-                    [sg.Text("(Ae tags will auto transfer)"),sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
+                                                  size=(text_width, len(b_group[t]) // text_width + 2),
+                                                  sbar_background_color = parameter["color"][t%4],
+                                                  default_text=b_group[t]["text"])] for t in range(len(b_group))]
+    split_layout = [[sg.Column(a_group_list), 
+                     sg.Graph((max_graph_level_1*10+5, 100), (0,0), (5, 100), k='-GRAPH1-'),
+                     sg.VSeperator(),
+                     sg.Graph((max_graph_level_2*10+5, 100), (0,0), (5, 100), k='-GRAPH2-'), 
+                     sg.Column(b_group_list), ],
+                    [sg.Text("(Aegisub tags will be auto transferred)"),sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
                      sg.Button('Copy timed_sub')],
                     [sg.Push(), sg.Push(), sg.Push(), sg.Button('Ok'), sg.Button('Cancel change'), sg.Push(),
                      sg.Button('Quit section + Apply all')]
                     ]
     split_window = sg.Window('Transfer timing subtitle by luudanmatcuoi', split_layout, finalize=True)
     split_window.bind("<Escape>", "ESCAPE")
+
+    for ga in graph1:
+        split_window['-GRAPH1-'].draw_rectangle((ga["level"]*2+0.5, 100-ga["start_nom"]), (ga["level"]*2+2, 100-ga["end_nom"]), fill_color=ga["color"], line_width=0)
+
+    for ga in graph2:
+        split_window['-GRAPH2-'].draw_rectangle((ga["level"]*2+0.5, 100-ga["start_nom"]), (ga["level"]*2+2, 100-ga["end_nom"]), fill_color=ga["color"], line_width=0)
 
     while True:
         event, values = split_window.read()
@@ -717,13 +783,17 @@ temp_eng_time = [t.copy() for t in eng_sub if t.is_comment is False]
 temp_eng_time = sorted(temp_eng_time, key=lambda t: t.start)
 for i in range(len(ocr_sub)):
     for t in range(len(temp_eng_time) - 1):
+        if cal_same_time(temp_eng_time[t + 1], ocr_sub[i]) ==0:
+            continue
         if is_continue_time(temp_eng_time[t], temp_eng_time[t + 1]) \
                 and ocr_sub[i].start < temp_eng_time[t].end < ocr_sub[i].end \
                 and 1 - abs(
             1 - cal_same_time(temp_eng_time[t], ocr_sub[i]) / cal_same_time(temp_eng_time[t + 1], ocr_sub[i])) > \
                 parameter["soft_combine_rate"]:
-            ocr_sub[i].start = temp_eng_time[t].start
-            ocr_sub[i].end = temp_eng_time[t + 1].end
+            if ocr_sub[i].start > temp_eng_time[t].start:
+                ocr_sub[i].start = temp_eng_time[t].start
+            if ocr_sub[i].end < temp_eng_time[t + 1].end:
+                ocr_sub[i].end = temp_eng_time[t + 1].end
 
 # Link tất cả các sub với nhau -> lưu vào group
 group = []
