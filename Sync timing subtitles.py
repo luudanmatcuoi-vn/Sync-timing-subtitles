@@ -1057,10 +1057,13 @@ if not parameter["is_transfer_sign"] and len(ocr_signs)>0:
     for sign in eng_signs:
         best_subtitle += [sign]
 else:
-    for sign in eng_signs:
-        sign.type = "Comment"
-        best_subtitle += [sign]
-
+    add_signs_timed_sub = sg.popup_yes_no("Do you want add signs from timed sub?\n(Signs will add as comment)")
+    if add_signs_timed_sub=="No" or add_signs_timed_sub==None:
+        pass
+    else:
+        for sign in eng_signs:
+            sign.type = "Comment"
+            best_subtitle += [sign]
 
     # Find last id in best_subtitle
     last_best_subtitle_id = max([convert_actor(ga.name)["id"] for ga in best_subtitle])
@@ -1080,7 +1083,6 @@ else:
         from tqdm import tqdm
 
         def process_img(image1, image2):
-            # Convert images to grayscale
             image11 = cv2.resize(image1, (256,144))
             image12 = cv2.resize(image2, (256,144))
             image1_gray = cv2.cvtColor(image11, cv2.COLOR_BGR2GRAY)
@@ -1152,7 +1154,6 @@ else:
                     vidcap1.set( cv2.CAP_PROP_POS_MSEC  , start_set_video1 )
                 database_score = [[] for i in range(sample_shift_range)]
                 for frame_number in tqdm(range(0-frame_range,frame_range)):
-
                     # print(vidcap1.get(cv2.CAP_PROP_POS_MSEC) )
                     if  start_shift_time + (0+frame_number)/fps1*1000 +1 < 0:
                         image1 = np.zeros((256, 144, 3), dtype = np.uint8)
@@ -1162,8 +1163,6 @@ else:
                             image1 = np.zeros((256, 144, 3), dtype = np.uint8)
                         else:
                            pass
-                    # cv2.imshow("b",cv2.resize(image1, (144,256)) )
-                    # cv2.waitKey(0)
                     for i in range(len(database_score)):
                         database_score[i] += [process_img(image1, ocr_images[i])]
 
@@ -1183,8 +1182,7 @@ else:
                 ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign_el.name)}
                 step_id+=1
                 ocr_sign_el.name=convert_actor(ac)
-                ocr_sign_el.start = pysubs2.time.make_time( frames=pysubs2.time.ms_to_frames(ms = ocr_sign_el.start , fps = parameter["framerate"])+compare_database , fps = parameter["framerate"])
-                ocr_sign_el.end = pysubs2.time.make_time( frames=pysubs2.time.ms_to_frames(ms = ocr_sign_el.end , fps = parameter["framerate"])+compare_database , fps = parameter["framerate"])
+                ocr_sign_el.shift(frames=compare_database,fps=fps1)
                 best_subtitle+=[ocr_sign_el]
 
 
