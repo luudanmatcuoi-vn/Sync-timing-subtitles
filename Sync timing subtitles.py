@@ -7,7 +7,8 @@ import pysubs2
 import re
 import requests
 import textdistance
-from os import system
+from colour import Color
+from os import system, remove
 from sys import exit
 from os.path import isfile, join, splitext
 
@@ -25,12 +26,8 @@ from symspellpy import SymSpell, Verbosity
 #     print("Too old to work :v ")
 #     exit()
 
-
 config = configparser.ConfigParser()
 config.read('config.ini', encoding = "utf8")
-
-# for key in config["Tooltip"]:
-#     config["Tooltip"][key] = config["Tooltip"][key].replace("\\n","\n")
 
 def get_para_from_recent(default = False):
     if default:
@@ -91,7 +88,14 @@ layout = [[sg.Text("Timed sub: ",tooltip = config["Tooltip"]["origin_sub_path"])
           
           [sg.Checkbox(text="Comment from_timed sub",tooltip = config["Tooltip"]["comment_timed_sub"], key="comment_timed_sub", default=parameter["comment_timed_sub"])],
           [sg.Checkbox(text="Comment from_ocr sub",tooltip = config["Tooltip"]["comment_ocr_sub"], key="comment_ocr_sub", default=parameter["comment_ocr_sub"])],
-          [sg.Checkbox(text="Remove tags in ocr sub",tooltip = config["Tooltip"]["is_remove_tag"], key="is_remove_tag", default=parameter["is_remove_tag"])],
+          
+          [sg.Checkbox(text="Remove tags and signs in ocr sub",tooltip = config["Tooltip"]["is_remove_tag"], 
+                key="is_remove_tag", default=parameter["is_remove_tag"], enable_events = True,
+                disabled = (lambda x: True if x else False ) (parameter["is_transfer_sign"]) )],
+          [sg.Checkbox(text="Using signs in ocr_sub",tooltip = config["Tooltip"]["is_transfer_sign"], 
+                key="is_transfer_sign", default=parameter["is_transfer_sign"], enable_events=True,
+                disabled = (lambda x: True if x else False ) (parameter["is_remove_tag"]) )],
+          
           [sg.Text("same_rate: ",tooltip= config["Tooltip"]["same_rate"]), 
            sg.Spin([ig / 100 for ig in range(101)], parameter["same_rate"], key="same_rate", size=(20, 1))],
           [sg.Text("distance_string_rate: ",tooltip=config["Tooltip"]["distance_string_rate"]),
@@ -102,14 +106,20 @@ layout = [[sg.Text("Timed sub: ",tooltip = config["Tooltip"]["origin_sub_path"])
           [sg.Text("framerate: ",tooltip = config["Tooltip"]["framerate"]), sg.Input(key="framerate", size=(20, 1), default_text=parameter["framerate"])],
           [sg.Text("frame_distance: ",tooltip = config["Tooltip"]["frame_distance"]),
            sg.Spin([ig for ig in range(10)], parameter["frame_distance"], key="frame_distance", size=(20, 1))],
-          
-          [sg.Text(size=(40, 1), key='log'),sg.Checkbox(text="quit_split_line_section",key="quit_split_line_section", default=False,visible=False),
-           sg.Checkbox(text="Try translate sign", key="trans_sign", default=False, visible=False)],
+
+          [sg.Text("For extend function",tooltip=config["Tooltip"]["extend_function"])],
+          [sg.Text("frame_range: ",tooltip = config["Tooltip"]["frame_range"]),
+           sg.Spin([ig for ig in range(10,100000)], parameter["frame_range"], key="frame_range", size=(20, 1))],
+          [sg.Text("sample_shift_range: ",tooltip = config["Tooltip"]["sample_shift_range"]),
+           sg.Spin([ig for ig in range(4,1000)], parameter["sample_shift_range"], key="sample_shift_range", size=(20, 1))],
+        
+          [sg.Checkbox(text="quit_split_line_section",key="quit_split_line_section", default=False,visible=False),
+           sg.Checkbox(text="Try translate sign (signs from timed_ocr will add as comment)", key="trans_sign", default=False, visible=False)],
           
           [sg.Button('Reset setting'), sg.Push(), sg.Button('Ok', size=(20, 1)), sg.Button('Quit')]]
 
 # Create the window
-window = sg.Window('Transfer timing subtitles by luudanmatcuoi v1.2.3', layout,icon='dango.ico')
+window = sg.Window('Transfer timing subtitles by luudanmatcuoi v1.2.4', layout,icon='dango.ico')
 
 # Display and interact with the Window using an Event Loop
 while True:
@@ -125,6 +135,18 @@ while True:
         else:
             window["origin_audio_path"].update(text_color='grey60',disabled=True)
             window["ocr_audio_path"].update(text_color='grey60',disabled=True)
+    
+    elif event == 'is_remove_tag':
+        if values["is_remove_tag"]:
+            window["is_transfer_sign"].update(False,disabled=True)
+        else:
+            window["is_transfer_sign"].update(disabled=False)
+
+    elif event == 'is_transfer_sign':
+        if values["is_transfer_sign"]:
+            window["is_remove_tag"].update(False,disabled=True)
+        else:
+            window["is_remove_tag"].update(disabled=False)
 
     if event == "Reset setting":
         parameter = get_para_from_recent(default = True)
@@ -168,7 +190,7 @@ while True:
 
         # Check if output file output already exist
         if isfile(parameter["output_filename"]):
-            double_check = sg.popup_yes_no("The "+parameter["output_filename"].split("\\")[0]+" file already exists. \nDo you want to overwrite it?",  title="Overwrite output file")
+            double_check = sg.popup_yes_no("The '"+parameter["output_filename"].split("\\")[0]+"' file already exists. \nDo you want to overwrite it?",  title="Overwrite output file")
             if double_check=="No" or double_check==None:
                 continue
             else:
@@ -179,10 +201,10 @@ while True:
         if isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and not parameter[
             "is_using_sushi"] or (isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and
                                   isfile(parameter["origin_audio_path"]) and isfile(parameter["ocr_audio_path"])):
-            window["log"].update("Please wait...")
+            print("Please wait...")
             break
         else:
-            window["log"].update("Wrong path, please try again")
+            print("Wrong path, please try again")
             continue
 
 
@@ -227,6 +249,8 @@ def split_line(stri):
 
 
 def cal_same_time(line1, line2):
+    if line1 is None or line2 is None:
+        return 0
     start1, end1 = line1.start, line1.end
     start2, end2 = line2.start, line2.end
     temp = (abs(start1 - end1) + abs(start2 - end2) - abs(start1 - start2) - abs(end1 - end2)) // 2
@@ -237,6 +261,8 @@ def cal_same_time(line1, line2):
 
 
 def duration(line):
+    if line is None:
+        return 0
     return line.end - line.start
 
 
@@ -258,7 +284,7 @@ def is_same_time(a, b):
         return True
 
 
-def is_continue_time(a, b):
+def is_continue_time(a, b ):
     if abs(a.end - b.start) < 1000 / parameter["framerate"] * parameter["frame_distance"]:
         return True
     else:
@@ -270,7 +296,20 @@ def clean_inline_comment(stri):
     return stri.replace("[","\\N")
 
 def flat_line(l):
+    if l is None:
+        return ""
     return f"l_{str(l.layer)}_s_{str(l.start)}_e_{str(l.end)}_c_{str(l.is_comment)}_s_{str(l.style)}_n_{str(l.name)}_t_{str(l.text)}"
+
+def gen_color(stt, lum=None, sat = None):
+    if type(stt)==type(1):
+        c = Color(parameter["color"][stt%len(parameter["color"])])
+    else:
+        c = Color(stt)
+    if lum!=None:
+        c.luminance = lum
+    if sat!=None:
+        c.saturation = sat
+    return c.hex_l
 
 def normalized_time_data(group):
     start = min([g["start"] for g in group])
@@ -280,7 +319,7 @@ def normalized_time_data(group):
     for g in range(len(graph)):
         graph[g]["start_nom"] = int((graph[g]["start"] - start)/le*100//1)
         graph[g]["end_nom"] = int((graph[g]["end"] - start)/le*100//1)
-        graph[g]["color"] = parameter["color"][g%4]
+        graph[g]["color"] = gen_color(g)
         graph[g]["level"] = 0
 
     for g in range(len(graph)):
@@ -299,7 +338,9 @@ def apply_sub(a_line, text):
     # Change all type to a_line:ssa_line ; text:string
     if type(a_line) == type([]) and len(a_line) == 1:
         a_line = a_line[0]
-    if type(text) != type("") and type(text) != type([]):
+    if type(text) == type({}):
+        text = text["text"]
+    elif type(text) != type("") and type(text) != type([]):
         text = text.text
     elif type(text) == type([]) and len(text) == 1:
         text = text[0].text
@@ -325,6 +366,8 @@ def apply_sub(a_line, text):
                 else:
                     pass
     text = temp + text
+    #Remove duplicate comment
+    text = re.sub(r"(\{[^\{\}]+\}({[^\{\}]+\})*)\1{1,}",r"\1",text)
     a_line.text = text
     return a_line
 
@@ -393,8 +436,10 @@ def split_sub(a_group, b_group):
     tempsplit = ["\\N".join(t) for t in tempsplit]
     for g in range(len(tempsplit)):
         split[g]["text"] = tempsplit[g]
-
-    b_group = split + [{"text":"", "splited":True, "count":0, "start": split[-1]["end"],  "end": split[-1]["end"]  }] * ( len(a_group) - len(split) )
+    try:
+        b_group = split + [{"text":"", "splited":True, "count":0, "start": split[-1]["end"],  "end": split[-1]["end"]  }] * ( len(a_group) - len(split) )
+    except:
+        b_group = split + [{"text":"", "splited":True, "count":0, "start": 0,  "end": 1  }] * ( len(a_group) - len(split) )
 
     # Gán tag:split vào a_group
     for q in range(len(a_group)):
@@ -416,17 +461,17 @@ def split_sub(a_group, b_group):
     text_width = 45
     a_group_list = [[sg.Text("Timed sub")]] + [[sg.Multiline(key=f"a_group_{t}",
                                                   size=(text_width, len(a_group[t].text) // text_width + 2),
-                                                  sbar_background_color = parameter["color"][t%4],
+                                                  sbar_background_color = gen_color(t,lum=3/5),
                                                   default_text=a_group[t].text, disabled=True, autoscroll = False)] for t in
                                                 range(len(a_group))]
     b_group_list = [[sg.Text("OCR sub")]] + [[sg.Multiline(key=f"b_group_{t}",
                                                   size=(text_width, len(b_group[t]) // text_width + 2),
-                                                  sbar_background_color = parameter["color"][t%4],
+                                                  sbar_background_color = gen_color(t,lum=2/5,sat=2/3),
                                                   default_text=b_group[t]["text"])] for t in range(len(b_group))]
     split_layout = [[sg.Column(a_group_list), 
-                     sg.Graph((max_graph_level_1*10+5, 100), (0,0), (5, 100), k='-GRAPH1-'),
+                     sg.Graph((max_graph_level_1*10, 100), (0,0), (5, 100), k='-GRAPH1-'),
                      sg.VSeperator(),
-                     sg.Graph((max_graph_level_2*10+5, 100), (0,0), (5, 100), k='-GRAPH2-'), 
+                     sg.Graph((max_graph_level_2*10, 100), (0,0), (5, 100), k='-GRAPH2-'), 
                      sg.Column(b_group_list), ],
                     [sg.Text("(Aegisub tags will be auto transferred)"),sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
                      sg.Button('Copy timed_sub')],
@@ -437,10 +482,10 @@ def split_sub(a_group, b_group):
     split_window.bind("<Escape>", "ESCAPE")
 
     for ga in graph1:
-        split_window['-GRAPH1-'].draw_rectangle((ga["level"]*2+0.5, 100-ga["start_nom"]), (ga["level"]*2+2, 100-ga["end_nom"]), fill_color=ga["color"], line_width=0)
+        split_window['-GRAPH1-'].draw_rectangle((ga["level"]*2+0.5, 100-ga["start_nom"]), (ga["level"]*2+2, 100-ga["end_nom"]), fill_color=gen_color(ga["color"],lum=3/5), line_width=0)
 
     for ga in graph2:
-        split_window['-GRAPH2-'].draw_rectangle((ga["level"]*2+0.5, 100-ga["start_nom"]), (ga["level"]*2+2, 100-ga["end_nom"]), fill_color=ga["color"], line_width=0)
+        split_window['-GRAPH2-'].draw_rectangle((ga["level"]*2+0.5, 100-ga["start_nom"]), (ga["level"]*2+2, 100-ga["end_nom"]), fill_color=gen_color(ga["color"],lum=2/5,sat=2/3), line_width=0)
 
     while True:
         event, values = split_window.read()
@@ -557,7 +602,9 @@ def convert_actor(va):
         for v in va:
             cla = v[v.index(":")+1:]
             try:
-                cla = int(cla)
+                cla = float(cla)
+                if cla%1 ==0:
+                    cla = int(cla)
             except:
                 pass
             res[v[:v.index(":")]] = cla
@@ -569,17 +616,21 @@ def convert_actor(va):
         res = "__".join(res)
         return res
 
-
 ##########################################################################################
 #### ----------------------------------------START ----------------------------------#####
 ##########################################################################################
 
 ### Sushi to sync sub by audio
 if parameter["is_using_sushi"]:
-    system(
+    ocr_sub_sushi_path = "ocr_sushi."+parameter["ocr_sub_path"][-3:]
+    temp_check = system(
         'sushi.exe --src "{ocr_audio_path}" --dst "{origin_audio_path}" --script "{ocr_sub_path}" -o ocr_sushi.'
         .format(  **parameter) + parameter["ocr_sub_path"][-3:])
-    ocr_sub_sushi_path = "ocr_sushi."+parameter["ocr_sub_path"][-3:]
+    if temp_check != 0:
+        print("Some error from sushi.exe. \n  - Please put the 'sushi.exe' in the same location as .EXE file\n  - Make sure ffmpeg is installed.")
+        system("pause")
+        exit()
+
 else:
     ocr_sub_sushi_path = parameter["ocr_sub_path"]
 
@@ -593,13 +644,13 @@ for i_s in range(len(eng_sub)):
     eng_sub[i_s].name = convert_actor( {"oldname":old_name, "id":str(i_s+1)} )
 
 # Nhặt tất cả dialogue sign ra khỏi eng_sub
-sign_group = []
+eng_signs = []
 i_eng = 0
 while i_eng < len(eng_sub):
     if any(["\\" + tag + "(" in eng_sub[i_eng].text for tag in ["pos", "move", "org", "clip"]]) and not eng_sub[
         i_eng].is_comment:
         eng_sub[i_eng].name = eng_sub[i_eng].name+"__tag:sign"
-        sign_group += [eng_sub[i_eng]]
+        eng_signs += [eng_sub[i_eng]]
         del eng_sub[i_eng]
     else:
         i_eng += 1
@@ -615,7 +666,7 @@ while i_eng < len(eng_sub):
     else:
         i_eng += 1
 
-# Nhận diện layer thường sử dụng
+# Detect most layer using
 layer_eng_sub = [eng.layer for eng in eng_sub if eng.layer!=0]
 if len(layer_eng_sub)>0:
     layer_eng_sub = max(set(layer_eng_sub), key=layer_eng_sub.count)
@@ -639,13 +690,22 @@ else:
     is_remove_lines_unexpected = True
 
 i_ocr = 0
+ocr_signs = []
 while i_ocr < len(ocr_sub):
+    if ocr_sub[i_ocr].is_comment:
+        del ocr_sub[i_ocr]
     # Remove tags in ocr_sub
     if parameter["is_remove_tag"]:
         if any(["\\" + tag + "(" in ocr_sub[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
+            ocr_signs += [ocr_sub[i_ocr]]
             del ocr_sub[i_ocr]
             continue
         ocr_sub[i_ocr].text = re.sub(r"\{[^\{\\\}]*\\[^\{\}]+\}","",ocr_sub[i_ocr].text)
+    else:
+        if any(["\\" + tag + "(" in ocr_sub[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
+            ocr_signs += [ocr_sub[i_ocr]]
+            del ocr_sub[i_ocr]
+            continue
 
     for r in rules:
         if r[0] == "replace":
@@ -684,7 +744,7 @@ while i_ocr < len(ocr_sub):
         if len(ga) < len(gb) * (1 - 60 / 100) and is_remove_lines_unexpected:
             tempb[t] = ""
     tempb = list(filter(None, tempb))
-    if len(tempb) == 0 or ocr_sub[i_ocr].is_comment:
+    if len(tempb) == 0:
         del ocr_sub[i_ocr]
         continue
     ocr_sub[i_ocr].text = "\\N".join(tempb)
@@ -825,57 +885,71 @@ best_subtitle = []
 while i_group < len(group):
     a = []
     b = []
-    if group[i_group]["eng"] is not None:
-        a += [group[i_group]["eng"]]
+    # if group[i_group]["eng"] is not None:
+    a += [group[i_group]["eng"]]
 
-    if group[i_group]["ocr"] is not None:
-        b += [group[i_group]["ocr"]]
+    # if group[i_group]["ocr"] is not None:
+    b += [group[i_group]["ocr"]]
 
     # Check Following group xem có trùng engline hay ocr line không ?
     following = 1
+    real_following = 1
     while True:
         temp_i = i_group + following
+
         if temp_i == len(group):
             break
-        # Nếu bên a/b rỗng -> sub chỉ từ 1 bên eng/ocr -> dừng lặp
-        if len(a) == 0 or len(b) == 0:
-            break
-        if group[temp_i]["ocr"] is None:
-            break
 
-        # Tìm kiếm sub chung -> đưa về a/b
-        has_group_add = False
+        is_group_add = False
         for gia in range(len(a)):
-            if group[temp_i]["eng"] == a[gia] and group[temp_i]["ocr"] != b[gia] and group[temp_i]["ocr"] is not None:
-                a += [group[temp_i]["eng"]]
-                b += [group[temp_i]["ocr"]]
-                has_group_add = True
-            elif (group[temp_i]["eng"] != a[gia] and group[temp_i]["ocr"] == b[gia] ) or \
-                    is_same_time(group[i_group]["eng"],group[temp_i]["eng"]) or \
-                    cal_same_time(group[temp_i]["ocr"],b[gia]) > duration(group[temp_i]["ocr"])*parameter["same_rate"] or \
-                    cal_same_time(group[temp_i]["ocr"],b[gia]) > duration(b[gia])*parameter["same_rate"] :
-                a += [group[temp_i]["eng"]]
-                b += [group[temp_i]["ocr"]]
-                has_group_add = True
-        if not has_group_add:
+            if flat_line(group[temp_i]["eng"]) == flat_line(a[gia]) and flat_line(group[temp_i]["ocr"]) != flat_line(b[gia]):
+                is_group_add = True
+
+            if flat_line(group[temp_i]["eng"]) != flat_line(a[gia]) and flat_line(group[temp_i]["ocr"]) == flat_line(b[gia]) :
+                is_group_add = True
+
+            if is_same_time(a[gia],group[temp_i]["eng"]):
+                is_group_add = True
+
+            if is_same_time(b[gia],group[temp_i]["ocr"]):
+                is_group_add = True
+
+            if is_same_time(group[i_group]["eng"],group[temp_i]["eng"]):
+                is_group_add = True
+
+            if cal_same_time(group[temp_i]["ocr"],b[gia]) > duration(group[temp_i]["ocr"])*parameter["same_rate"]:
+                is_group_add = True
+
+            if cal_same_time(group[temp_i]["ocr"],b[gia]) > duration(b[gia])*parameter["same_rate"]:
+                is_group_add = True
+        if is_group_add:
+            a += [group[temp_i]["eng"]]
+            b += [group[temp_i]["ocr"]]
+            real_following = following +1
+        else:
             break
 
         following += 1
 
+    # Remove duplicate elements in a and b group
     g = 0
     while g<len(a):
-        if flat_line(a[g]) in [flat_line(ka) for ka in a[:g]]:
+        if a[g] is None:
+            del a[g]
+        elif flat_line(a[g]) in [flat_line(ka) for ka in a[:g]]:
             del a[g]
         else:
             g+=1
     g = 0
     while g<len(b):
-        if flat_line(b[g]) in [flat_line(ka) for ka in b[:g]]:
+        if b[g] is None:
+            del b[g]
+        elif flat_line(b[g]) in [flat_line(ka) for ka in b[:g]]:
             del b[g]
         else:
             g+=1
 
-    i_group += following
+    i_group += real_following
 
     # Chia a và b vào các trường hợp
     if len(a) == 0:
@@ -889,7 +963,7 @@ while i_group < len(group):
             b[i].type = "Comment"
         best_subtitle += b
 
-    if len(b) == 0:
+    elif len(b) == 0:
         for i_s in range(len(a)):
             a[i_s].name = a[i_s].name+"__tag:from_timed"
         if parameter["comment_timed_sub"]:
@@ -897,14 +971,14 @@ while i_group < len(group):
         else:
             best_subtitle += a
 
-    if len(a) == 1 and len(b) == 1:
+    elif len(a) == 1 and len(b) == 1:
         a[0].name = a[0].name+"__tag:"
         best_subtitle += [apply_sub(a, b)]
 
-    if len(a) == 1 and len(b) > 1:
+    elif len(a) == 1 and len(b) > 1:
         best_subtitle += combine_sub(a, b)
 
-    if len(a) > 1:
+    elif len(a) > 1:
         best_subtitle += split_sub(a, b)
 
 # Tìm các sub from_eng, from_sub cô độc đứng cạnh nhau
@@ -932,13 +1006,188 @@ while True:
     except:
         break
 
-# translate = [re.findall(r"\{[^\{\}]+(\\N){0,1}[^\{\}]*\}[^\{\}]+(\\N){0,1}[^\{\}\\]*",ta.text) for ta in best_subtitle ]
-#translate = [re.findall(r"\{[^{}]+\\?N?[^{}]*}[^{}]+\\?N?[^{}\\]*", ta.text) for ta in best_subtitle]
-#translate = [item for row in translate for item in row]
 translate = []
 
-for sign in sign_group:
-    best_subtitle += [sign]
+### Transfer signs
+def grouping_signs(group):
+    temp_group = []
+    gr = []
+    for g in group:
+        is_group_sign_add = False
+        for r in gr:
+            g_text = re.sub(r"\{.+}","",g.text)
+            r_text = re.sub(r"\{.+}","",r.text)
+            if is_same_time(g,r) or is_continue_time(g,r) or is_continue_time(r,g) or is_same_sub(g.text,r.text) :
+                is_group_sign_add = True
+        if is_group_sign_add or len(gr)==0:
+            gr += [g]
+        elif len(gr)>0:
+            start = min([af.start for af in gr])
+            end = max([af.end for af in gr])
+            line = pysubs2.SSAEvent(start=start , end=end , text = str(len(temp_group)).zfill(4))
+            temp_group += [{ "id":len(temp_group), "start":start, "end":end, "line":line, "group":gr}]
+            gr = [g]
+    if len(gr)>0:
+        start = min([af.start for af in gr])
+        end = max([af.end for af in gr])
+        line = pysubs2.SSAEvent(start=start , end=end , text = str(len(temp_group)).zfill(4))
+        temp_group += [{ "id":len(temp_group), "start":start, "end":end, "line":line, "group":gr}]
+        gr = []
+    # temp_i = 0
+    # while True:
+    #     ahaha = False
+    #     for i in range(temp_i+1,len(temp_group)):
+    #         temp_same_time = cal_same_time(temp_group[temp_i]["line"],temp_group[i]["line"])
+    #         if same_time > duration(temp_group[temp_i]["line"])*parameter["same_rate"] or \
+    #         same_time > duration(temp_group[i]["line"])*parameter["same_rate"] or \
+    #         is_continue_time(temp_group[temp_i]["line"],temp_group[i]["line"]):
+    #             temp_group[temp_i]["group"]+=temp_group[i]["group"]
+    #             print(temp_i)
+    #             del temp_group[i]
+    #             ahaha = True
+    #             break
+    #     if not ahaha:
+    #         temp_i+=1
+    #     if temp_i == len(temp_group):
+    #         break
+    return temp_group
+
+
+if not parameter["is_transfer_sign"] and len(ocr_signs)>0:
+    for sign in eng_signs:
+        best_subtitle += [sign]
+else:
+    for sign in eng_signs:
+        sign.type = "Comment"
+        best_subtitle += [sign]
+
+
+    # Find last id in best_subtitle
+    last_best_subtitle_id = max([convert_actor(ga.name)["id"] for ga in best_subtitle])
+    step_id = 2
+    shift_signs = sg.popup_yes_no("Shift signs from ocr_sub feature has to compare multi frames and it will take a while.\nMake sure you choose video source instead of audio.\nDo you want to shift signs ?")
+    if shift_signs=="No" or double_check==None:
+        # Add ocr_signs
+        for ocr_sign in ocr_signs:
+            ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign.name)}
+            step_id+=1
+            ocr_sign.name=convert_actor(ac)
+            best_subtitle+=[ocr_sign]
+    else:
+        from skimage.metrics import structural_similarity
+        import cv2
+        import numpy as np
+        from tqdm import tqdm
+
+        def process_img(image1, image2):
+            # Convert images to grayscale
+            image11 = cv2.resize(image1, (256,144))
+            image12 = cv2.resize(image2, (256,144))
+            image1_gray = cv2.cvtColor(image11, cv2.COLOR_BGR2GRAY)
+            image2_gray = cv2.cvtColor(image12, cv2.COLOR_BGR2GRAY)
+
+            # Compute SSIM between the two images, score is between 0 and 1, diff is actuall diff with all floats
+            (score, diff) = structural_similarity(image1_gray, image2_gray, full=True)
+            return score
+
+        vidcap1 = cv2.VideoCapture(parameter["origin_audio_path"])
+        vidcap2 = cv2.VideoCapture(parameter["ocr_audio_path"])
+        fps1 = vidcap1.get(cv2.CAP_PROP_FPS)
+        fps2 = vidcap2.get(cv2.CAP_PROP_FPS)
+        print("fps of 2 videos: ",fps1,fps2)
+
+        ocr_sub_or = pysubs2.load(parameter["ocr_sub_path"])
+
+        ocr_signs = []
+        for i_ocr in range(len(ocr_sub_or)):
+            if any(["\\" + tag + "(" in ocr_sub_or[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
+                ocr_signs += [ocr_sub_or[i_ocr]]
+        ocr_signs = grouping_signs(ocr_signs)
+        for ocr_sign in ocr_signs:
+            frame_range = int(parameter["frame_range"])
+            sample_shift_range = int(parameter["sample_shift_range"])
+
+            #Video1
+            start_shift_time = ocr_sign["line"].start - (sample_shift_range//2)/fps2*1000
+            if start_shift_time<0:
+                vidcap2.set( cv2.CAP_PROP_POS_MSEC , 0 )
+            else:
+                vidcap2.set( cv2.CAP_PROP_POS_MSEC , start_shift_time )
+            ocr_images = []
+            while True:
+                for i in range(sample_shift_range):
+                    if  start_shift_time + i/fps2*1000 +1  < 0:
+                        image = np.zeros((256, 144, 3), dtype = np.uint8)
+                    else:
+                        success,image = vidcap2.read()
+                        if not success:
+                            image = np.zeros((256, 144, 3), dtype = np.uint8)
+                        else:
+                           pass
+                    ocr_images += [image]
+
+                if process_img(ocr_images[0], ocr_images[-1]) > 0.8:
+                    if process_img(ocr_images[1], ocr_images[-1]) > 0.8:
+                        sample_shift_range += 4
+                        print("Sample images are too similar, extend sample_shift_range to ",sample_shift_range)
+                else:
+                    break
+
+            # Show ocr_images for debug only
+            # for i in range(len(ocr_images)):
+            #     if i ==0:
+            #         vis = cv2.resize(ocr_images[i], (144,256)) 
+            #     else:
+            #         vis = np.concatenate((vis, cv2.resize(ocr_images[i], (144,256)) ), axis=1)
+            # vis = cv2.resize(vis, dsize=(int(sample_shift_range*256+1), 144), interpolation=cv2.INTER_CUBIC)
+            # cv2.imshow("a",vis)
+            # cv2.waitKey(0) 
+
+            #Video1
+            while True:
+                start_set_video1 = start_shift_time - frame_range/fps1*1000
+                if start_set_video1<0:
+                    vidcap1.set( cv2.CAP_PROP_POS_MSEC  , 0 )
+                else:
+                    vidcap1.set( cv2.CAP_PROP_POS_MSEC  , start_set_video1 )
+                database_score = [[] for i in range(sample_shift_range)]
+                for frame_number in tqdm(range(0-frame_range,frame_range)):
+
+                    # print(vidcap1.get(cv2.CAP_PROP_POS_MSEC) )
+                    if  start_shift_time + (0+frame_number)/fps1*1000 +1 < 0:
+                        image1 = np.zeros((256, 144, 3), dtype = np.uint8)
+                    else:
+                        success,image1 = vidcap1.read()
+                        if not success:
+                            image1 = np.zeros((256, 144, 3), dtype = np.uint8)
+                        else:
+                           pass
+                    # cv2.imshow("b",cv2.resize(image1, (144,256)) )
+                    # cv2.waitKey(0)
+                    for i in range(len(database_score)):
+                        database_score[i] += [process_img(image1, ocr_images[i])]
+
+                compare_database = [sum([ database_score[t][g+t] for t in range(sample_shift_range)]) for g in range(len(database_score[0])-sample_shift_range)]
+                temp_compare_database = max(compare_database)
+                if temp_compare_database < sample_shift_range* 0.8:
+                    frame_range += 50
+                    print("Result are sus, extend frame_range to ",frame_range)
+                    continue
+                else:
+                    compare_database = compare_database.index(temp_compare_database) - frame_range
+                print("Shift group '", re.sub(r"\{.+\}","", ocr_sign["group"][0].text ) , "' " ,compare_database, "frames")
+                break
+
+            #Shift time, change actor name
+            for ocr_sign_el in ocr_sign["group"]:
+                ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign_el.name)}
+                step_id+=1
+                ocr_sign_el.name=convert_actor(ac)
+                ocr_sign_el.start = pysubs2.time.make_time( frames=pysubs2.time.ms_to_frames(ms = ocr_sign_el.start , fps = parameter["framerate"])+compare_database , fps = parameter["framerate"])
+                ocr_sign_el.end = pysubs2.time.make_time( frames=pysubs2.time.ms_to_frames(ms = ocr_sign_el.end , fps = parameter["framerate"])+compare_database , fps = parameter["framerate"])
+                best_subtitle+=[ocr_sign_el]
+
+
 
 for comment in comment_group:
     best_subtitle += [comment]
@@ -948,7 +1197,14 @@ best_subtitle = sorted(best_subtitle, key= lambda tq: (convert_actor(tq.name)["i
 
 for sub in range(len(best_subtitle)):
     ob = convert_actor(best_subtitle[sub].name)
-    ob = [str(ob["oldname"]), str(ob["tag"])]
+
+    # Find marker line -> try to recover origin
+    if re.match(r"^\{[^\{\}\\]+\}$",best_subtitle[sub].text) is not None:
+        ob = [str(ob["oldname"])]
+        best_subtitle[sub].text = best_subtitle[sub].text.replace("{[","{").replace("]}","}")
+    else:
+        ob = [str(ob["oldname"]), str(ob["tag"])]
+
     ob = [o for o in ob if o not in ["comment",""]]
     if len(ob)==2 and "sign" in ob:
         ob.remove("sign")
@@ -959,6 +1215,11 @@ for sub in range(len(best_subtitle)):
 write_sub = pysubs2.load(parameter["origin_sub_path"])
 while len(write_sub) > 0:
     del write_sub[0]
+
+# Transfer styles
+if parameter["ocr_sub_path"][-3:] in ["ass", "ssa"]:
+    style_file = pysubs2.load(parameter["ocr_sub_path"])
+    write_sub.import_styles(style_file)
 
 for b in best_subtitle:
     write_sub.append(b)
