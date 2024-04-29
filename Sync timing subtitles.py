@@ -616,9 +616,9 @@ def convert_actor(va):
         res = "__".join(res)
         return res
 
-##########################################################################################
-#### ----------------------------------------START ----------------------------------#####
-##########################################################################################
+###########################################################################################
+#### ----------------------------------------START ---------------------------------- #####
+###########################################################################################
 
 ### Sushi to sync sub by audio
 if parameter["is_using_sushi"]:
@@ -835,7 +835,7 @@ while i_ocr < len(ocr_sub):
 
 
 
-########################################## MAIN PART ######################################
+########################################## MAIN PART ##########################################
 
 
 # Change time stamp
@@ -1066,7 +1066,7 @@ else:
     last_best_subtitle_id = max([convert_actor(ga.name)["id"] for ga in best_subtitle])
     step_id = 2
     shift_signs = sg.popup_yes_no("Shift signs from ocr_sub feature has to compare multi frames and it will take a while.\nMake sure you choose video source instead of audio.\nDo you want to shift signs ?")
-    if shift_signs=="No" or double_check==None:
+    if shift_signs=="No" or shift_signs==None:
         # Add ocr_signs
         for ocr_sign in ocr_signs:
             ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign.name)}
