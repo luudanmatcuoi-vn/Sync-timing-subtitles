@@ -13,7 +13,6 @@ from sys import exit
 from os.path import isfile, join, splitext
 
 import PySimpleGUI as sg
-from symspellpy import SymSpell, Verbosity
 
 # try:
 #     req = requests.get("https://gist.github.com/luudanmatcuoi-vn/208833abf603e417efe1e6ccbb1be4f3")
@@ -46,17 +45,6 @@ def get_para_from_recent(default = False):
                 parameter[k] = float(parameter[k])
     return parameter
 parameter = get_para_from_recent()
-
-sym_spell = SymSpell()
-
-for dic_name in config["Dictionaries"]["name"].split("|"):
-    dictionary_path = join("dictionaries", dic_name+".txt")
-    for enc in config["Dictionaries"]["encode"].split("|"):
-        try:
-            sym_spell.load_dictionary(dictionary_path, 0, 1, encoding=enc)
-            break
-        except:
-            pass
 
 # Define the window's contents ,tooltip = config["Tooltip"]["origin_sub_path"]
 layout = [[sg.Text("Timed sub: ",tooltip = config["Tooltip"]["origin_sub_path"]), 
@@ -618,9 +606,24 @@ def convert_actor(va):
         res = "__".join(res)
         return res
 
-###########################################################################################
-#### ----------------------------------------START ---------------------------------- #####
-###########################################################################################
+############################################################################################
+#### ------------------------------------- START ------------------------------------- #####
+############################################################################################
+
+
+if parameter["is_spell_checker"]:
+    from symspellpy import SymSpell, Verbosity
+
+    sym_spell = SymSpell()
+    for dic_name in config["Dictionaries"]["name"].split("|"):
+        dictionary_path = join("dictionaries", dic_name+".txt")
+        for enc in config["Dictionaries"]["encode"].split("|"):
+            try:
+                sym_spell.load_dictionary(dictionary_path, 0, 1, encoding=enc)
+                print("Loaded ",dic_name, " dictionary.")
+                break
+            except:
+                pass
 
 ### Sushi to sync sub by audio
 if parameter["is_using_sushi"]:
