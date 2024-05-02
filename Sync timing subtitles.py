@@ -174,8 +174,19 @@ while True:
                             except:
                                 pass
 
+        # Check if output file output already exist
+        if isfile(parameter["output_filename"]):
+            double_check = sg.popup_yes_no("The '"+parameter["output_filename"].split("\\")[0]+"' file already exists. \nDo you want to overwrite it?",  title="Overwrite output file")
+            if double_check=="No" or double_check==None:
+                continue
+            else:
+                pass
+        else:
+            pass
+
         if parameter["framerate"] in [23.976023976023978, 23.976, 23.98]:
             parameter["framerate"] = 24000/1001
+
         # Check output_filename var
         pre, ext = splitext(parameter["output_filename"])
         parameter["output_filename"] = pre + ".ass"
@@ -186,17 +197,8 @@ while True:
         with open('config.ini', 'w', encoding = "utf8") as configfile:
             config.write(configfile)
 
-        parameter["color"] = parameter["color"].split("__")
-
-        # Check if output file output already exist
-        if isfile(parameter["output_filename"]):
-            double_check = sg.popup_yes_no("The '"+parameter["output_filename"].split("\\")[0]+"' file already exists. \nDo you want to overwrite it?",  title="Overwrite output file")
-            if double_check=="No" or double_check==None:
-                continue
-            else:
-                pass
-        else:
-            pass
+        if type(parameter["color"]) == type(""):
+            parameter["color"] = parameter["color"].split("__")
 
         if isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and not parameter[
             "is_using_sushi"] or (isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and
@@ -469,9 +471,9 @@ def split_sub(a_group, b_group):
                                                   sbar_background_color = gen_color(t,lum=2/5,sat=2/3),
                                                   default_text=b_group[t]["text"])] for t in range(len(b_group))]
     split_layout = [[sg.Column(a_group_list), 
-                     sg.Graph((max_graph_level_1*10, 100), (0,0), (5, 100), k='-GRAPH1-'),
+                     sg.Graph(((max_graph_level_1+1)*7-3, 100), (0,0), ((max_graph_level_1+1)*7-3, 100), k='-GRAPH1-'),
                      sg.VSeperator(),
-                     sg.Graph((max_graph_level_2*10, 100), (0,0), (5, 100), k='-GRAPH2-'), 
+                     sg.Graph(((max_graph_level_2+1)*7-3, 100), (0,0), ((max_graph_level_2+1)*7-3, 100), k='-GRAPH2-'), 
                      sg.Column(b_group_list), ],
                     [sg.Text("(Aegisub tags will be auto transferred)"),sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
                      sg.Button('Copy timed_sub')],
@@ -482,10 +484,10 @@ def split_sub(a_group, b_group):
     split_window.bind("<Escape>", "ESCAPE")
 
     for ga in graph1:
-        split_window['-GRAPH1-'].draw_rectangle((ga["level"]*2+0.5, 100-ga["start_nom"]), (ga["level"]*2+2, 100-ga["end_nom"]), fill_color=gen_color(ga["color"],lum=3/5), line_width=0)
+        split_window['-GRAPH1-'].draw_rectangle((ga["level"]*7, 100-ga["start_nom"]), (ga["level"]*7+4, 100-ga["end_nom"]), fill_color=gen_color(ga["color"],lum=3/5), line_width=0)
 
     for ga in graph2:
-        split_window['-GRAPH2-'].draw_rectangle((ga["level"]*2+0.5, 100-ga["start_nom"]), (ga["level"]*2+2, 100-ga["end_nom"]), fill_color=gen_color(ga["color"],lum=2/5,sat=2/3), line_width=0)
+        split_window['-GRAPH2-'].draw_rectangle((ga["level"]*7, 100-ga["start_nom"]), (ga["level"]*7+4, 100-ga["end_nom"]), fill_color=gen_color(ga["color"],lum=2/5,sat=2/3), line_width=0)
 
     while True:
         event, values = split_window.read()
@@ -770,7 +772,7 @@ if parameter["is_spell_checker"]:
             if len(temp[t]) == 1 and re.search( tpattern , temp[t]):
                 # Các word 1 ký tự là dấu câu hoặc số
                 if re.search(
-                        r"[\s()\"!,\-.;?_~a-zA-Z0-9%s]" % re.escape(list_characters),
+                        r"[\s()\"!,\'\-.;?_~a-zA-Z0-9%s]" % re.escape(list_characters),
                         temp[t]):
                     temp[t] = [temp[t], True]
                 else:
@@ -1057,133 +1059,136 @@ if not parameter["is_transfer_sign"] and len(ocr_signs)>0:
     for sign in eng_signs:
         best_subtitle += [sign]
 else:
-    add_signs_timed_sub = sg.popup_yes_no("Do you want add signs from timed sub?\n(Signs will add as comment)")
-    if add_signs_timed_sub=="No" or add_signs_timed_sub==None:
-        pass
-    else:
-        for sign in eng_signs:
-            sign.type = "Comment"
-            best_subtitle += [sign]
+    if len(eng_signs)>0:
+        add_signs_timed_sub = sg.popup_yes_no("Do you want add signs from timed sub?\n(Signs will add as comment)")
+        if add_signs_timed_sub=="No" or add_signs_timed_sub==None:
+            pass
+        else:
+            for sign in eng_signs:
+                sign.type = "Comment"
+                best_subtitle += [sign]
 
     # Find last id in best_subtitle
     last_best_subtitle_id = max([convert_actor(ga.name)["id"] for ga in best_subtitle])
     step_id = 2
-    shift_signs = sg.popup_yes_no("Shift signs from ocr_sub feature has to compare multi frames and it will take a while.\nMake sure you choose video source instead of audio.\nDo you want to shift signs ?")
-    if shift_signs=="No" or shift_signs==None:
-        # Add ocr_signs
-        for ocr_sign in ocr_signs:
-            ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign.name)}
-            step_id+=1
-            ocr_sign.name=convert_actor(ac)
-            best_subtitle+=[ocr_sign]
-    else:
-        from skimage.metrics import structural_similarity
-        import cv2
-        import numpy as np
-        from tqdm import tqdm
 
-        def process_img(image1, image2):
-            image11 = cv2.resize(image1, (256,144))
-            image12 = cv2.resize(image2, (256,144))
-            image1_gray = cv2.cvtColor(image11, cv2.COLOR_BGR2GRAY)
-            image2_gray = cv2.cvtColor(image12, cv2.COLOR_BGR2GRAY)
+    if len(ocr_signs)>0:
+        shift_signs = sg.popup_yes_no("Shift signs from ocr_sub feature has to compare multi frames and it will take a while.\nMake sure you choose video source instead of audio.\nDo you want to shift signs ?")
+        if shift_signs=="No" or shift_signs==None:
+            # Add ocr_signs
+            for ocr_sign in ocr_signs:
+                ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign.name)}
+                step_id+=1
+                ocr_sign.name=convert_actor(ac)
+                best_subtitle+=[ocr_sign]
+        else:
+            from skimage.metrics import structural_similarity
+            import cv2
+            import numpy as np
+            from tqdm import tqdm
 
-            # Compute SSIM between the two images, score is between 0 and 1, diff is actuall diff with all floats
-            (score, diff) = structural_similarity(image1_gray, image2_gray, full=True)
-            return score
+            def process_img(image1, image2):
+                image11 = cv2.resize(image1, (256,144))
+                image12 = cv2.resize(image2, (256,144))
+                image1_gray = cv2.cvtColor(image11, cv2.COLOR_BGR2GRAY)
+                image2_gray = cv2.cvtColor(image12, cv2.COLOR_BGR2GRAY)
 
-        vidcap1 = cv2.VideoCapture(parameter["origin_audio_path"])
-        vidcap2 = cv2.VideoCapture(parameter["ocr_audio_path"])
-        fps1 = vidcap1.get(cv2.CAP_PROP_FPS)
-        fps2 = vidcap2.get(cv2.CAP_PROP_FPS)
-        print("fps of 2 videos: ",fps1,fps2)
+                # Compute SSIM between the two images, score is between 0 and 1, diff is actuall diff with all floats
+                (score, diff) = structural_similarity(image1_gray, image2_gray, full=True)
+                return score
 
-        ocr_sub_or = pysubs2.load(parameter["ocr_sub_path"])
+            vidcap1 = cv2.VideoCapture(parameter["origin_audio_path"])
+            vidcap2 = cv2.VideoCapture(parameter["ocr_audio_path"])
+            fps1 = vidcap1.get(cv2.CAP_PROP_FPS)
+            fps2 = vidcap2.get(cv2.CAP_PROP_FPS)
+            print("fps of 2 videos: ",fps1,fps2)
 
-        ocr_signs = []
-        for i_ocr in range(len(ocr_sub_or)):
-            if any(["\\" + tag + "(" in ocr_sub_or[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
-                ocr_signs += [ocr_sub_or[i_ocr]]
-        ocr_signs = grouping_signs(ocr_signs)
-        for ocr_sign in ocr_signs:
-            frame_range = int(parameter["frame_range"])
-            sample_shift_range = int(parameter["sample_shift_range"])
+            ocr_sub_or = pysubs2.load(parameter["ocr_sub_path"])
 
-            #Video1
-            start_shift_time = ocr_sign["line"].start - (sample_shift_range//2)/fps2*1000
-            if start_shift_time<0:
-                vidcap2.set( cv2.CAP_PROP_POS_MSEC , 0 )
-            else:
-                vidcap2.set( cv2.CAP_PROP_POS_MSEC , start_shift_time )
-            ocr_images = []
-            while True:
-                for i in range(sample_shift_range):
-                    if  start_shift_time + i/fps2*1000 +1  < 0:
-                        image = np.zeros((256, 144, 3), dtype = np.uint8)
-                    else:
-                        success,image = vidcap2.read()
-                        if not success:
+            ocr_signs = []
+            for i_ocr in range(len(ocr_sub_or)):
+                if any(["\\" + tag + "(" in ocr_sub_or[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
+                    ocr_signs += [ocr_sub_or[i_ocr]]
+            ocr_signs = grouping_signs(ocr_signs)
+            for ocr_sign in ocr_signs:
+                frame_range = int(parameter["frame_range"])
+                sample_shift_range = int(parameter["sample_shift_range"])
+
+                #Video1
+                start_shift_time = ocr_sign["line"].start - (sample_shift_range//2)/fps2*1000
+                if start_shift_time<0:
+                    vidcap2.set( cv2.CAP_PROP_POS_MSEC , 0 )
+                else:
+                    vidcap2.set( cv2.CAP_PROP_POS_MSEC , start_shift_time )
+                ocr_images = []
+                while True:
+                    for i in range(sample_shift_range):
+                        if  start_shift_time + i/fps2*1000 +1  < 0:
                             image = np.zeros((256, 144, 3), dtype = np.uint8)
                         else:
-                           pass
-                    ocr_images += [image]
+                            success,image = vidcap2.read()
+                            if not success:
+                                image = np.zeros((256, 144, 3), dtype = np.uint8)
+                            else:
+                               pass
+                        ocr_images += [image]
 
-                if process_img(ocr_images[0], ocr_images[-1]) > 0.8:
-                    if process_img(ocr_images[1], ocr_images[-1]) > 0.8:
-                        sample_shift_range += 4
-                        print("Sample images are too similar, extend sample_shift_range to ",sample_shift_range)
-                else:
-                    break
-
-            # Show ocr_images for debug only
-            # for i in range(len(ocr_images)):
-            #     if i ==0:
-            #         vis = cv2.resize(ocr_images[i], (144,256)) 
-            #     else:
-            #         vis = np.concatenate((vis, cv2.resize(ocr_images[i], (144,256)) ), axis=1)
-            # vis = cv2.resize(vis, dsize=(int(sample_shift_range*256+1), 144), interpolation=cv2.INTER_CUBIC)
-            # cv2.imshow("a",vis)
-            # cv2.waitKey(0) 
-
-            #Video1
-            while True:
-                start_set_video1 = start_shift_time - frame_range/fps1*1000
-                if start_set_video1<0:
-                    vidcap1.set( cv2.CAP_PROP_POS_MSEC  , 0 )
-                else:
-                    vidcap1.set( cv2.CAP_PROP_POS_MSEC  , start_set_video1 )
-                database_score = [[] for i in range(sample_shift_range)]
-                for frame_number in tqdm(range(0-frame_range,frame_range)):
-                    # print(vidcap1.get(cv2.CAP_PROP_POS_MSEC) )
-                    if  start_shift_time + (0+frame_number)/fps1*1000 +1 < 0:
-                        image1 = np.zeros((256, 144, 3), dtype = np.uint8)
+                    if process_img(ocr_images[0], ocr_images[-1]) > 0.8:
+                        if process_img(ocr_images[1], ocr_images[-1]) > 0.8:
+                            sample_shift_range += 4
+                            print("Sample images are too similar, extend sample_shift_range to ",sample_shift_range)
                     else:
-                        success,image1 = vidcap1.read()
-                        if not success:
+                        break
+
+                # Show ocr_images for debug only
+                # for i in range(len(ocr_images)):
+                #     if i ==0:
+                #         vis = cv2.resize(ocr_images[i], (144,256)) 
+                #     else:
+                #         vis = np.concatenate((vis, cv2.resize(ocr_images[i], (144,256)) ), axis=1)
+                # vis = cv2.resize(vis, dsize=(int(sample_shift_range*256+1), 144), interpolation=cv2.INTER_CUBIC)
+                # cv2.imshow("a",vis)
+                # cv2.waitKey(0) 
+
+                #Video1
+                while True:
+                    start_set_video1 = start_shift_time - frame_range/fps1*1000
+                    if start_set_video1<0:
+                        vidcap1.set( cv2.CAP_PROP_POS_MSEC  , 0 )
+                    else:
+                        vidcap1.set( cv2.CAP_PROP_POS_MSEC  , start_set_video1 )
+                    database_score = [[] for i in range(sample_shift_range)]
+                    for frame_number in tqdm(range(0-frame_range,frame_range)):
+                        # print(vidcap1.get(cv2.CAP_PROP_POS_MSEC) )
+                        if  start_shift_time + (0+frame_number)/fps1*1000 +1 < 0:
                             image1 = np.zeros((256, 144, 3), dtype = np.uint8)
                         else:
-                           pass
-                    for i in range(len(database_score)):
-                        database_score[i] += [process_img(image1, ocr_images[i])]
+                            success,image1 = vidcap1.read()
+                            if not success:
+                                image1 = np.zeros((256, 144, 3), dtype = np.uint8)
+                            else:
+                               pass
+                        for i in range(len(database_score)):
+                            database_score[i] += [process_img(image1, ocr_images[i])]
 
-                compare_database = [sum([ database_score[t][g+t] for t in range(sample_shift_range)]) for g in range(len(database_score[0])-sample_shift_range)]
-                temp_compare_database = max(compare_database)
-                if temp_compare_database < sample_shift_range* 0.8:
-                    frame_range += 50
-                    print("Result are sus, extend frame_range to ",frame_range)
-                    continue
-                else:
-                    compare_database = compare_database.index(temp_compare_database) - frame_range
-                print("Shift group '", re.sub(r"\{.+\}","", ocr_sign["group"][0].text ) , "' " ,compare_database, "frames")
-                break
+                    compare_database = [sum([ database_score[t][g+t] for t in range(sample_shift_range)]) for g in range(len(database_score[0])-sample_shift_range)]
+                    temp_compare_database = max(compare_database)
+                    if temp_compare_database < sample_shift_range* 0.8:
+                        frame_range += 50
+                        print("Result are sus, extend frame_range to ",frame_range)
+                        continue
+                    else:
+                        compare_database = compare_database.index(temp_compare_database) - frame_range
+                    print("Shift group '", re.sub(r"\{.+\}","", ocr_sign["group"][0].text ) , "' " ,compare_database, "frames")
+                    break
 
-            #Shift time, change actor name
-            for ocr_sign_el in ocr_sign["group"]:
-                ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign_el.name)}
-                step_id+=1
-                ocr_sign_el.name=convert_actor(ac)
-                ocr_sign_el.shift(frames=compare_database,fps=fps1)
-                best_subtitle+=[ocr_sign_el]
+                #Shift time, change actor name
+                for ocr_sign_el in ocr_sign["group"]:
+                    ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign_el.name)}
+                    step_id+=1
+                    ocr_sign_el.name=convert_actor(ac)
+                    ocr_sign_el.shift(frames=compare_database,fps=fps1)
+                    best_subtitle+=[ocr_sign_el]
 
 
 
