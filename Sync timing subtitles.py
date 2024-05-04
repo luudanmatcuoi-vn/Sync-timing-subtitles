@@ -180,6 +180,9 @@ while True:
         parameter["output_filename"] = pre + ".ass"
         list_characters = parameter["characters"]
 
+        if type(parameter["color"]) == type([]):
+            parameter["color"] = "__".join(parameter["color"])
+
         # Save setting to recent
         config["Recent"] = parameter
         with open('config.ini', 'w', encoding = "utf8") as configfile:
