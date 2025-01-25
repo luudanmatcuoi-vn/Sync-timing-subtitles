@@ -2,204 +2,367 @@
 # yt link   : https://www.youtube.com/channel/UCdyAb9TAX1qQ5R2-c91-x8g
 # GitHub link  : https://github.com/luudanmatcuoi-vn
 
-import configparser
-import pysubs2
-import re
-import requests
-import textdistance
+import yaml, sys, pysubs2, re, argparse, requests, textdistance
 from colour import Color
 from os import system, remove
-from sys import exit
 from os.path import isfile, join, splitext
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+sys.stdout.reconfigure(encoding='utf-8')
 
 import PySimpleGUI as sg
+import flet as ft
+from flet_core.control_event import ControlEvent
 
-# try:
-#     req = requests.get("https://gist.github.com/luudanmatcuoi-vn/208833abf603e417efe1e6ccbb1be4f3")
-#     if "Allow" in req.text:
-#         pass
-#     else:
-#         print("Too old to work :v ")
-#         exit()
-# except:
-#     print("Too old to work :v ")
-#     exit()
+try:
+    req = requests.get("https://gist.github.com/luudanmatcuoi-vn/208833abf603e417efe1e6ccbb1be4f3")
+    if "Allow" in req.text:
+        pass
+    else:
+        print("Too old to work :v ")
+        sys.exit()
+except:
+    print("Too old to work :v ")
+    sys.exit()
 
-config = configparser.ConfigParser()
-config.read('config.ini', encoding = "utf8")
+with open("default.yaml", encoding="utf-8") as f:
+    default_config = yaml.load(f, Loader=yaml.FullLoader)
+with open("recent.yaml", encoding="utf-8") as f:
+    recent_config = yaml.load(f, Loader=yaml.FullLoader)
 
 def get_para_from_recent(default = False):
     if default:
-        parameter = dict(config["Default"])
+        parameter = dict(default_config)
+        parameter.pop('Dictionaries', None)
+        parameter.pop('Tooltip', None)
     else:
-        parameter = dict(config["Recent"])
-    for k in parameter.keys():
-        if parameter[k] == "True":
-            parameter[k] = True
-        elif parameter[k] == "False":
-            parameter[k] = False
-        elif parameter[k].replace(".","").isdigit():
-            if ".0" in parameter[k] or "." not in parameter[k]:
-                parameter[k] = int(float(parameter[k])//1)
-            else:
-                parameter[k] = float(parameter[k])
+        parameter = dict(recent_config)
     return parameter
-parameter = get_para_from_recent()
 
-# Define the window's contents ,tooltip = config["Tooltip"]["origin_sub_path"]
-layout = [[sg.Text("Timed sub: ",tooltip = config["Tooltip"]["origin_sub_path"]), 
-           sg.Input(key="origin_sub_path",tooltip = config["Tooltip"]["origin_sub_path"], change_submits=True, expand_x=True, default_text=parameter["origin_sub_path"]),
-           sg.FileBrowse(key='origin_sub_path',file_types=(("Subtitles", "*.ass"),("Subtitles", "*.srt")))],
-          [sg.Text("OCR sub: ",tooltip = config["Tooltip"]["ocr_sub_path"]),
-           sg.Input(key="ocr_sub_path",tooltip = config["Tooltip"]["ocr_sub_path"], change_submits=True, expand_x=True, default_text=parameter["ocr_sub_path"]),
-           sg.FileBrowse(key='ocr_sub_path',file_types=[("Subtitle files","*."+fo) for fo in ["ass","srt","ssa","vtt","sub","txt","tmp"] ])],
-          
-          [sg.Text("Audio/video of timed sub: ",tooltip = config["Tooltip"]["origin_audio_path"]), 
-           sg.Input(key="origin_audio_path",tooltip = config["Tooltip"]["origin_audio_path"], 
-                change_submits=True, expand_x=True, default_text=parameter["origin_audio_path"],
-                text_color= (lambda x: "black" if x else "grey60")(parameter["is_using_sushi"]),
-                disabled = (lambda x: False if x else True ) (parameter["is_using_sushi"])),
-           sg.FileBrowse(key='origin_audio_path')],
-          [sg.Text("Audio/video of ocr sub: ",tooltip = config["Tooltip"]["ocr_audio_path"]),
-           sg.Input(key="ocr_audio_path",tooltip = config["Tooltip"]["ocr_audio_path"], 
-                change_submits=True, expand_x=True, default_text=parameter["ocr_audio_path"],
-                text_color= (lambda x: "black" if x else "grey60")(parameter["is_using_sushi"]),
-                disabled = (lambda x: False if x else True ) (parameter["is_using_sushi"])),
-           sg.FileBrowse(key='ocr_audio_path')],
-          
-          [sg.Text("Output: ",tooltip = config["Tooltip"]["output_filename"]),
-           sg.Input(key="output_filename", expand_x=True, default_text=parameter["output_filename"])],
+def convert_parameter(controls={}, raw_data=False):
+    global parameter, run_mode, list_characters
+    if not raw_data:
+        for ta in parameter.keys():
+            if ta in controls.keys():
+                parameter[ta] = controls[ta].value
 
+    if parameter["framerate"] in [23.976023976023978,"23.976023976023978", 23.976, "23.976", 23.98, "23.98"]:
+        parameter["framerate"] = 24000/1001
+    parameter["framerate"] = float(parameter["framerate"])
 
-          [sg.Checkbox(text="Using sushi auto sync based on audio",tooltip = config["Tooltip"]["is_using_sushi"], key="is_using_sushi", enable_events=True, default=parameter["is_using_sushi"])],
-          [sg.Checkbox(text="Using spell checker",tooltip = config["Tooltip"]["is_spell_checker"], key="is_spell_checker", default=parameter["is_spell_checker"])],
-          
-          [sg.Checkbox(text="Comment from_timed sub",tooltip = config["Tooltip"]["comment_timed_sub"], key="comment_timed_sub", default=parameter["comment_timed_sub"])],
-          [sg.Checkbox(text="Comment from_ocr sub",tooltip = config["Tooltip"]["comment_ocr_sub"], key="comment_ocr_sub", default=parameter["comment_ocr_sub"])],
-          
-          [sg.Checkbox(text="Remove tags and signs in ocr sub",tooltip = config["Tooltip"]["is_remove_tag"], 
-                key="is_remove_tag", default=parameter["is_remove_tag"], enable_events = True,
-                disabled = (lambda x: True if x else False ) (parameter["is_transfer_sign"]) )],
-          [sg.Checkbox(text="Using signs in ocr_sub",tooltip = config["Tooltip"]["is_transfer_sign"], 
-                key="is_transfer_sign", default=parameter["is_transfer_sign"], enable_events=True,
-                disabled = (lambda x: True if x else False ) (parameter["is_remove_tag"]) )],
-          
-          [sg.Text("same_rate: ",tooltip= config["Tooltip"]["same_rate"]), 
-           sg.Spin([ig / 100 for ig in range(101)], parameter["same_rate"], key="same_rate", size=(20, 1))],
-          [sg.Text("distance_string_rate: ",tooltip=config["Tooltip"]["distance_string_rate"]),
-           sg.Spin([ig / 100 for ig in range(101)], parameter["distance_string_rate"], key="distance_string_rate",size=(20, 1))],
-          [sg.Text("distance_string_character: ",tooltip=config["Tooltip"]["distance_string_character"]),
-           sg.Spin([ig for ig in range(10)], parameter["distance_string_character"], key="distance_string_character",size=(20, 1))],
-          
-          [sg.Text("framerate: ",tooltip = config["Tooltip"]["framerate"]), sg.Input(key="framerate", size=(20, 1), default_text=parameter["framerate"])],
-          [sg.Text("frame_distance: ",tooltip = config["Tooltip"]["frame_distance"]),
-           sg.Spin([ig for ig in range(10)], parameter["frame_distance"], key="frame_distance", size=(20, 1))],
+    # Check output_filename
+    pre, ext = splitext(parameter["output_filename"])
+    parameter["output_filename"] = pre + ".ass"
 
-          [sg.Text("For extend function",tooltip=config["Tooltip"]["extend_function"])],
-          [sg.Text("frame_range: ",tooltip = config["Tooltip"]["frame_range"]),
-           sg.Spin([ig for ig in range(10,100000)], parameter["frame_range"], key="frame_range", size=(20, 1))],
-          [sg.Text("sample_shift_range: ",tooltip = config["Tooltip"]["sample_shift_range"]),
-           sg.Spin([ig for ig in range(4,1000)], parameter["sample_shift_range"], key="sample_shift_range", size=(20, 1))],
-        
-          [sg.Checkbox(text="quit_split_line_section",key="quit_split_line_section", default=False,visible=False),
-           sg.Checkbox(text="Try translate sign (signs from timed_ocr will add as comment)", key="trans_sign", default=False, visible=False)],
-          
-          [sg.Button('Reset setting'), sg.Push(), sg.Button('Ok', size=(20, 1)), sg.Button('Quit')]]
-
-# Create the window
-window = sg.Window('Transfer timing subtitles by luudanmatcuoi v1.2.4', layout,icon='dango.ico')
-
-# Display and interact with the Window using an Event Loop
-while True:
-    event, values = window.read()
-
-    if event == sg.WINDOW_CLOSED or event == 'Quit':
-        exit()
-
-    elif event == 'is_using_sushi':
-        if values["is_using_sushi"]:
-            window["origin_audio_path"].update(text_color='black',disabled=False)
-            window["ocr_audio_path"].update(text_color='black',disabled=False)
-        else:
-            window["origin_audio_path"].update(text_color='grey60',disabled=True)
-            window["ocr_audio_path"].update(text_color='grey60',disabled=True)
+    list_characters = parameter["characters"]
     
-    elif event == 'is_remove_tag':
-        if values["is_remove_tag"]:
-            window["is_transfer_sign"].update(False,disabled=True)
-        else:
-            window["is_transfer_sign"].update(disabled=False)
-
-    elif event == 'is_transfer_sign':
-        if values["is_transfer_sign"]:
-            window["is_remove_tag"].update(False,disabled=True)
-        else:
-            window["is_remove_tag"].update(disabled=False)
-
-    if event == "Reset setting":
-        parameter = get_para_from_recent(default = True)
-        for ta in parameter.keys():
-            try:
-                values[ta]
-                window[ta].update(parameter[ta])
-            except:
-                pass
-
-    if event == "Ok":
-        for ta in parameter.keys():
-            if ta in values.keys():
-                if values[ta] in ["True", "False", True, False]:
-                    parameter[ta] = bool(values[ta])
-                else:
-                    try:
-                        parameter[ta] = float(values[ta])
-                    except:
-                        if len(re.findall(r"[0-9]+/[0-9]+",values[ta]))>0:
-                            parameter[ta] = int(values[ta].split("/")[0])/int(values[ta].split("/")[1])
-                        else:
-                            try:
-                                parameter[ta] = str(values[ta])
-                            except:
-                                pass
-
-        # Check if output file output already exist
-        if isfile(parameter["output_filename"]):
-            double_check = sg.popup_yes_no("The '"+parameter["output_filename"].split("\\")[0]+"' file already exists. \nDo you want to overwrite it?",  title="Overwrite output file")
-            if double_check=="No" or double_check==None:
-                continue
-            else:
-                pass
-        else:
-            pass
-
-        if parameter["framerate"] in [23.976023976023978, 23.976, 23.98]:
-            parameter["framerate"] = 24000/1001
-
-        # Check output_filename var
-        pre, ext = splitext(parameter["output_filename"])
-        parameter["output_filename"] = pre + ".ass"
-        list_characters = parameter["characters"]
-
+    # Save setting to recent if run_mode == window
+    if run_mode:
         if type(parameter["color"]) == type([]):
             parameter["color"] = "__".join(parameter["color"])
+        if type(parameter["ass_sign_tags"]) == type([]):
+            parameter["ass_sign_tags"] = "__".join(parameter["ass_sign_tags"])
 
-        # Save setting to recent
-        config["Recent"] = parameter
-        with open('config.ini', 'w', encoding = "utf8") as configfile:
-            config.write(configfile)
+        recent_config = parameter
+        with open("recent.yaml", "w", encoding="utf-8") as f:
+            recent_config = yaml.dump( recent_config, stream=f, default_flow_style=False, sort_keys=False )
 
-        if type(parameter["color"]) == type(""):
-            parameter["color"] = parameter["color"].split("__")
+    if type(parameter["color"]) == type(""):
+        parameter["color"] = parameter["color"].split("__")
+    if type(parameter["ass_sign_tags"]) == type(""):
+        parameter["ass_sign_tags"] = parameter["ass_sign_tags"].split("__")
 
-        if isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and not parameter[
-            "is_using_sushi"] or (isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and
-                                  isfile(parameter["origin_audio_path"]) and isfile(parameter["ocr_audio_path"])):
-            print("Please wait...")
-            break
+    if isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and not parameter[
+        "is_using_sushi"] or (isfile(parameter["origin_sub_path"]) and isfile(parameter["ocr_sub_path"]) and
+                              isfile(parameter["origin_audio_path"]) and isfile(parameter["ocr_audio_path"])):
+        return True, "Please wait..."
+    else:
+        return False, "Wrong path, please try again"
+
+parameter = get_para_from_recent()
+
+run_mode = True
+
+# Define default values
+parser = argparse.ArgumentParser()
+for ta in parameter.keys():
+    if ta in default_config["Tooltip"].keys():
+        parser.add_argument('--'+ta , type=str, help=default_config["Tooltip"][ta])
+    else:
+        parser.add_argument('--'+ta , type=str)
+
+args = parser.parse_args() # get arguments from command line
+args = vars(args)
+for g in args:
+    if args[g] is not None:
+        run_mode = False
+        parameter[g] = args[g]
+
+if not run_mode:
+    _, _ = convert_parameter(raw_data=True)
+
+class FileInputControl(ft.UserControl):
+    def __init__(
+        self,
+        label: str = "",
+        value: str = "",
+        icon: str = "file",
+        tooltip: str = "",
+        disabled: bool = False,
+        file_type: list = None,
+    ):
+        super().__init__()
+        self.icon = icon
+        self.text_value = value
+        self.label = label
+        self.tooltip = tooltip
+        self.disabled = disabled
+        self.file_type = ft.FilePickerFileType.CUSTOM if icon =="file" else ft.FilePickerFileType.ANY
+        self.allowed_extensions = "ass;srt;ssa;vtt;sub;txt;tmp".split(";") if icon=="file" else []
+
+    @property
+    def value(self):
+        return self.text_value
+
+    @value.setter
+    def value(self, e):
+        self.text_value = e
+        self.text_field.value = self.text_value
+        self.text_field.update()
+
+    def on_change(self, e):
+        self.text_value = self.text_field.value
+
+    def pick_files_result(self, e: ft.FilePickerResultEvent):
+        if e.files:
+            selected_files = [file.path for file in e.files]
+            self.text_field.value = selected_files[0]
+            self.text_value = self.text_field.value
+            self.text_field.update()
+            
+    def build(self):
+        self.file_picker = ft.FilePicker( on_result=self.pick_files_result )
+        
+        self.pick_button = ft.IconButton(
+            icon=ft.Icons.FILE_OPEN if self.icon == "file" else ft.Icons.VIDEO_FILE, disabled = self.disabled,
+            on_click=lambda _: self.file_picker.pick_files( file_type=self.file_type, allowed_extensions = self.allowed_extensions )
+        )
+
+        self.text_field = ft.TextField(
+            value=self.text_value, label=self.label,
+            expand=True, border_width = 2, disabled = self.disabled, text_align=ft.TextAlign.RIGHT, on_change=self.on_change,
+            tooltip = ft.Tooltip(message=default_config["Tooltip"][self.tooltip], padding=10, border_radius=5, text_style=ft.TextStyle(size=15, color=ft.Colors.SURFACE)),
+            suffix= self.pick_button,
+        )
+        return ft.Stack( [ self.file_picker, self.text_field ] )
+
+def main_window(page: ft.Page):
+    page.title = 'Transfer timing subtitles by luudanmatcuoi v1.3.0'
+    page.window.min_width = 800
+    page.padding = 10
+    page.window.icon = "dango.ico"
+    page.size = 10
+    page.scroll = "auto"
+
+    def pick_files(e, file_type, control_to_update):
+        file_picker = ft.FilePicker(
+            on_result=lambda e: setattr(control_to_update, "value", e.files[0].path if e.files else "")
+        )
+        # page.overlay.append(file_pickera)
+        file_picker.pick_files(
+            allowed_extensions=[file_type] if file_type else None
+        )
+
+    def on_sushi_change(e):
+        origin_audio_input.disabled = not e.control.value
+        ocr_audio_input.disabled = not e.control.value
+        page.update()
+
+    def on_tag_change(e):
+        if e.control.value:
+            transfer_sign_cb.value = False
+            transfer_sign_cb.disabled = True
         else:
-            print("Wrong path, please try again")
-            continue
+            transfer_sign_cb.disabled = False
+        page.update()
 
+    def on_sign_change(e):
+        if e.control.value:
+            remove_tag_cb.value = False
+            remove_tag_cb.disabled = True
+        else:
+            remove_tag_cb.disabled = False
+        page.update()
+
+    def reset_settings(e):
+        parameter = get_para_from_recent(default = True)
+        for key, value in parameter.items():
+            if key in ["same_rate", "distance_string_rate", "distance_string_character"]:
+                value = int(value*100)
+            if key in controls:
+                controls[key].value = value
+        page.update()
+
+    def changetheme(e):
+        if page.theme_mode == "light":
+            page.theme_mode = "dark"
+            changetheme_btn.text = "Dark Mode"  # Change button text
+        else:
+            page.theme_mode = "light"
+            changetheme_btn.text = "Light Mode"  # Change button text
+        page.update()
+
+    def on_submit(e):
+        res, msg = convert_parameter(controls)
+        if not res:
+            if "try again" in logging_text.value:
+                logging_text.value = logging_text.value + "."
+            else:
+                logging_text.value = msg
+            page.update()
+        else:
+            page.window.close()
+
+    def on_quit(e):
+        global quit
+        quit = True
+        page.window.close()
+
+    def slider_change(e,element):
+        element.label = str(int(e.control.value)/100)
+        page.update()
+
+    def mk_tooltip(e):
+        return ft.Tooltip(message=default_config["Tooltip"][e], padding=10, border_radius=5, text_style=ft.TextStyle(size=15, color=ft.Colors.SURFACE))
+
+    # Rest of the controls    
+    origin_sub_input = FileInputControl(label="Timed sub", value=parameter["origin_sub_path"], 
+        icon = "file", tooltip="origin_sub_path" )
+    origin_audio_input = FileInputControl(label="Audio/video", value=parameter["origin_audio_path"], 
+        disabled=not parameter["is_using_sushi"], tooltip="origin_audio_path", icon = "audio" )
+    ocr_sub_input = FileInputControl(label="OCR sub", value=parameter["ocr_sub_path"], 
+        icon = "file", tooltip="ocr_sub_path" )
+    ocr_audio_input = FileInputControl(label="Audio/video", value=parameter["ocr_audio_path"], 
+        disabled= not parameter["is_using_sushi"], icon="audio" , tooltip="ocr_audio_path" )
+    output_filename = ft.TextField(
+        label="Output",
+        value=parameter["output_filename"],
+        expand=True,
+        border_width=2,
+    )
+    sushi_cb = ft.Checkbox( label="Using sushi auto sync based on audio", 
+        value=parameter["is_using_sushi"], on_change=on_sushi_change, tooltip=mk_tooltip("is_using_sushi") )
+    spell_checker_cb = ft.Checkbox( label="Using spell checker", value=parameter["is_spell_checker"],
+        tooltip=mk_tooltip("is_spell_checker") )
+    comment_timed_cb = ft.Checkbox( label="Timed sub", value=parameter["comment_timed_sub"], 
+        tooltip=mk_tooltip("comment_timed_sub") )
+    comment_ocr_cb = ft.Checkbox( label="OCR sub", value=parameter["comment_ocr_sub"],
+        tooltip=mk_tooltip("comment_ocr_sub") )
+    remove_tag_cb = ft.Checkbox( label="Remove tags and signs in ocr sub", value=parameter["is_remove_tag"], 
+        on_change=on_tag_change, tooltip=mk_tooltip("is_remove_tag") )
+    transfer_sign_cb = ft.Checkbox( label="Using signs in ocr_sub", value=parameter["is_transfer_sign"], 
+        on_change=on_sign_change, tooltip=mk_tooltip("is_transfer_sign") )
+    same_rate = ft.Slider( on_change= lambda e:slider_change(e,same_rate), min=0, max=100, value=parameter["same_rate"], 
+        divisions=100, expand=True, tooltip=mk_tooltip("same_rate") )
+    distance_string_rate = ft.Slider( on_change= lambda e:slider_change(e,distance_string_rate), min=0, max=100, 
+        value=parameter["distance_string_rate"], divisions=100, expand=True, tooltip=mk_tooltip("distance_string_rate"))
+    distance_string_character = ft.Slider( on_change= lambda e:slider_change(e,distance_string_character), min=0, max=100, 
+        value=parameter["distance_string_character"], divisions=100, expand=True, tooltip=mk_tooltip("distance_string_character") )
+    framerate = ft.TextField( label="framerate", value=str(parameter["framerate"]), width=200, expand=True, 
+        tooltip=mk_tooltip("framerate") )
+    frame_distance = ft.Slider( label="{value}%", min=0, max=20, value=parameter["frame_distance"], 
+        divisions=20, expand=True, tooltip=mk_tooltip("frame_distance") )
+    frame_range = ft.Slider( label="{value}%", min=10, max=100000, value=parameter["frame_range"], 
+        expand=True, tooltip=mk_tooltip("frame_range") )
+    sample_shift_range = ft.Slider( label="{value}%", min=4, max=1000, value=parameter["sample_shift_range"], 
+        expand=True, tooltip=mk_tooltip("sample_shift_range") )
+    changetheme_btn = ft.Button("Light Mode" if page.theme_mode == "light" else "Dark Mode", on_click=changetheme)
+
+    logging_text = ft.Text(value="")
+    reset_btn = ft.ElevatedButton("Reset settings", on_click=reset_settings)
+    submit_btn = ft.ElevatedButton("Ok", on_click=on_submit)
+    quit_btn = ft.ElevatedButton("Quit", on_click=on_quit)
+    empty = ft.Container(width=15)
+    empty_ex = ft.Container(expand=True)
+
+    controls = {
+        "origin_sub_path": origin_sub_input,
+        "ocr_sub_path": ocr_sub_input,
+        "origin_audio_path": origin_audio_input,
+        "ocr_audio_path": ocr_audio_input,
+        "output_filename": output_filename,
+        "is_using_sushi": sushi_cb,
+        "is_spell_checker": spell_checker_cb,
+        "comment_timed_sub": comment_timed_cb,
+        "comment_ocr_sub": comment_ocr_cb,
+        "is_remove_tag": remove_tag_cb,
+        "is_transfer_sign": transfer_sign_cb,
+        "same_rate": same_rate,
+        "distance_string_rate": distance_string_rate,
+        "distance_string_character": distance_string_character,
+        "framerate": framerate,
+        "frame_distance": frame_distance,
+        "frame_range": frame_range,
+        "sample_shift_range": sample_shift_range,
+        "changetheme_btn": changetheme_btn,
+    }
+
+    content = ft.Container(
+        content=ft.Column(
+            [   ft. Container( content = ft.Row(
+                    [ ft.Column(  # Left column
+                        [ft.Text("Timed Files", size=16, weight=ft.FontWeight.BOLD),
+                        origin_sub_input,
+                        origin_audio_input,
+                        ], expand=True, spacing=10,),
+                    ft.Column(  # Right column
+                        [ ft.Text("OCR Files", size=16, weight=ft.FontWeight.BOLD),
+                          ocr_sub_input,
+                          ocr_audio_input,
+                        ], expand=True, spacing=10,),   ],
+                    spacing=10, ), margin=ft.margin.only(bottom=20)
+                ),
+                output_filename,
+                ft.Row([sushi_cb, spell_checker_cb, empty ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Row([ft.Text("Comment lines that only appear in: "), comment_timed_cb, comment_ocr_cb]),
+                remove_tag_cb,
+                transfer_sign_cb,
+                ft.ExpansionTile(
+                    title=ft.Text("Addition parameters", size=16, weight=ft.FontWeight.BOLD),
+                    subtitle=ft.Text("Change it if subtitle not sync probably"),
+                    affinity=ft.TileAffinity.PLATFORM,
+                    trailing=ft.Icon(ft.Icons.ARROW_DROP_DOWN),
+                    maintain_state=True,
+                    controls=[
+                            ft.Row([ft.Text("Same Rate :"), same_rate ]),
+                            ft.Row([ft.Text("distance_string_rate :"), distance_string_rate ]),
+                            ft.Row([ft.Text("distance_string_character :"), distance_string_character ]),
+                            ft.Row([ft.Text("distance_string_character :"), frame_distance ]),
+                            ft.Row([framerate, empty_ex ]),
+                            ft.Row([ft.Text("For extend function:", size=16, weight=ft.FontWeight.BOLD), empty_ex ]),
+                            ft.Row([ft.Text("frame_range :"), frame_range ]),
+                            ft.Row([ft.Text("sample_shift_range :"), sample_shift_range ]),
+                        ],
+                ),
+                logging_text,
+                ft.Row(
+                    [reset_btn, empty, changetheme_btn, empty_ex, submit_btn, empty, quit_btn, empty],
+                    alignment=ft.MainAxisAlignment.SPACE_AROUND
+                )
+            ],
+            spacing=2,
+            scroll=ft.ScrollMode.AUTO
+        ),
+        padding=ft.padding.all(10),
+        expand=True
+    )
+
+    page.add(content)
+
+if run_mode:
+    ft.app(target = main_window)
+    if "quit" in globals():
+        exit()
 
 def split_line(stri):
     # remove \N ở đầu câu
@@ -240,7 +403,6 @@ def split_line(stri):
 
     return result
 
-
 def cal_same_time(line1, line2):
     if line1 is None or line2 is None:
         return 0
@@ -252,12 +414,10 @@ def cal_same_time(line1, line2):
     else:
         return temp
 
-
 def duration(line):
     if line is None:
         return 0
     return line.end - line.start
-
 
 def is_same_sub(a, b):
     if (textdistance.hamming.distance(a, b) >= parameter["distance_string_character"] and
@@ -265,7 +425,6 @@ def is_same_sub(a, b):
         return False
     else:
         return True
-
 
 def is_same_time(a, b):
     if a is None or b is None:
@@ -275,7 +434,6 @@ def is_same_time(a, b):
         return False
     else:
         return True
-
 
 def is_continue_time(a, b ):
     if abs(a.end - b.start) < 1000 / parameter["framerate"] * parameter["frame_distance"]:
@@ -304,9 +462,9 @@ def gen_color(stt, lum=None, sat = None):
         c.saturation = sat
     return c.hex_l
 
-def normalized_time_data(group):
-    start = min([g["start"] for g in group])
-    end = max([g["end"] for g in group])
+def normalized_time_data(group,listgroup):
+    start = min([g["start"] for t in listgroup for g in t ])
+    end = max([g["end"] for t in listgroup for g in t])
     le = abs(end-start)
     graph = group
     for g in range(len(graph)):
@@ -314,7 +472,6 @@ def normalized_time_data(group):
         graph[g]["end_nom"] = int((graph[g]["end"] - start)/le*100//1)
         graph[g]["color"] = gen_color(g)
         graph[g]["level"] = 0
-
     for g in range(len(graph)):
         while True:
             same_level = [graph[ga] for ga in range(g) if graph[ga]["level"] == graph[g]["level"]]
@@ -324,8 +481,15 @@ def normalized_time_data(group):
             else:
                 break
 
-    return graph
-
+    max_level = max([g["level"] for g in graph])
+    import flet.canvas as cvw
+    cp = cvw.Canvas(
+        [
+            cvw.Rect( x = g["level"]*(20+10), y = g["start_nom"]-50, 
+                width = 20, height = g["end_nom"]-g["start_nom"], paint=ft.Paint(g["color"])) for g in graph
+        ], width = (max_level+1)*30
+        )
+    return cp
 
 def apply_sub(a_line, text):
     # Change all type to a_line:ssa_line ; text:string
@@ -364,7 +528,6 @@ def apply_sub(a_line, text):
     a_line.text = text
     return a_line
 
-
 def combine_sub(a_group, b_group):
     # Ghép các sub giống nhau hiển thị liên tiếp
     i = 0
@@ -392,7 +555,6 @@ def combine_sub(a_group, b_group):
         a_group[0].name = a_group[0].name+"__tag:combine"
 
     return a_group
-
 
 def split_sub(a_group, b_group):
     # Thử split sub theo các dấu trong câu
@@ -444,138 +606,131 @@ def split_sub(a_group, b_group):
             a_group[blablo] = apply_sub(a_group[blablo], b_group[blablo])
         return a_group
 
-    #Prepare for graphic visualize
-    graph1 = normalized_time_data([{"text":ga.text,"start":ga.start,"end":ga.end} for ga in a_group])
-    max_graph_level_1 = max([ga["level"] for ga in graph1])
-    graph2 = normalized_time_data(b_group)
-    max_graph_level_2 = max([ga["level"] for ga in graph2])
+    def split_page(page: ft.Page):
+        page.title = "Transfer timing subtitle"
+        page.window.width = 1000
+        page.window.height = 400
+        page.window.resizable = True
+        page.padding = 20
 
-    # Open window
-    text_width = 45
-    a_group_list = [[sg.Text("Timed sub")]] + [[sg.Multiline(key=f"a_group_{t}",
-                                                  size=(text_width, len(a_group[t].text) // text_width + 2),
-                                                  sbar_background_color = gen_color(t,lum=3/5),
-                                                  default_text=a_group[t].text, disabled=True, autoscroll = False)] for t in
-                                                range(len(a_group))]
-    b_group_list = [[sg.Text("OCR sub")]] + [[sg.Multiline(key=f"b_group_{t}",
-                                                  size=(text_width, len(b_group[t]) // text_width + 2),
-                                                  sbar_background_color = gen_color(t,lum=2/5,sat=2/3),
-                                                  default_text=b_group[t]["text"])] for t in range(len(b_group))]
-    split_layout = [[sg.Column(a_group_list), 
-                     sg.Graph(((max_graph_level_1+1)*7-3, 100), (0,0), ((max_graph_level_1+1)*7-3, 100), k='-GRAPH1-'),
-                     sg.VSeperator(),
-                     sg.Graph(((max_graph_level_2+1)*7-3, 100), (0,0), ((max_graph_level_2+1)*7-3, 100), k='-GRAPH2-'), 
-                     sg.Column(b_group_list), ],
-                    [sg.Text("(Aegisub tags will be auto transferred)"),sg.Push(), sg.Button('Swap'), sg.Button('Combine'), sg.Button('Duplicate'),
-                     sg.Button('Copy timed_sub')],
-                    [sg.Push(), sg.Push(), sg.Push(), sg.Button('Ok'), sg.Button('Cancel change'), sg.Push(),
-                     sg.Button('Quit section + Apply all')]
-                    ]
-    split_window = sg.Window('Transfer timing subtitle by luudanmatcuoi', split_layout, finalize=True)
-    split_window.bind("<Escape>", "ESCAPE")
+        text_width = 45
+        a_group_list = [ ft.Row( controls = [ft.Container( content = ft.Text(a_group[t].text), padding = 10, expand=True,
+                        border = ft.border.all(3, gen_color(t,lum=3/5) ) )] ) for t in range(len(a_group)) ] 
+        
+        b_group_list = [ ft.TextField( border_width = 3,
+                        value=b_group[t]["text"], border_color = gen_color(t,lum=2/5,sat=2/3), 
+                        multiline = True) for t in range(len(b_group)) ] 
 
-    for ga in graph1:
-        split_window['-GRAPH1-'].draw_rectangle((ga["level"]*7, 100-ga["start_nom"]), (ga["level"]*7+4, 100-ga["end_nom"]), fill_color=gen_color(ga["color"],lum=3/5), line_width=0)
+        #Prepare for graphic visualize
+        temp_graph = [[{"text":ga.text,"start":ga.start,"end":ga.end} for ga in a_group],b_group]
+        graph1 = normalized_time_data([{"text":ga.text,"start":ga.start,"end":ga.end} for ga in a_group], temp_graph)
+        graph2 = normalized_time_data(b_group, temp_graph)
+        
+        def handle_swap(e):
+            if len(a_group_list) < 2:
+                return
+            values = [field.value for field in b_group_list]
+            temp = values[0]
+            for i in range(len(values) - 1):
+                b_group_list[i].value = values[i + 1]
+            b_group_list[-1].value = temp
+            page.update()
 
-    for ga in graph2:
-        split_window['-GRAPH2-'].draw_rectangle((ga["level"]*7, 100-ga["start_nom"]), (ga["level"]*7+4, 100-ga["end_nom"]), fill_color=gen_color(ga["color"],lum=2/5,sat=2/3), line_width=0)
+        def handle_combine(e):
+            if not b_group_list:
+                return
+            combined_text = " ".join(field.value for field in b_group_list if field.value)
+            b_group_list[0].value = combined_text
+            for field in b_group_list[1:]:
+                field.value = ""
+            page.update()
 
-    while True:
-        event, values = split_window.read()
-        # See if user wants to quit or window was closed
-        if event in (sg.WINDOW_CLOSED, "ESCAPE", "Cancel change"):
-            split_window.close()
-            return a_group
-        if event == "Quit section + Apply all":
+        def handle_duplicate(e):
+            if not b_group_list:
+                return
+            first_value = b_group_list[0].value
+            for field in b_group_list[1:]:
+                field.value = first_value
+            page.update()
+
+        def handle_copy_timed(e):
+            for i, (a_field, b_field) in enumerate(zip(a_group_list, b_group_list)):
+                b_field.value = a_field.content.value
+            page.update()
+
+        def handle_ok(e):
+            # Get values from fields
+            a_group_values = [field.controls[0].content.value for field in a_group_list]
+            b_group_values = [field.value for field in b_group_list]
+            
+            b_group_values = [ re.sub(r"\{[^\{\\\}]*\\[^\{\}]+\}", "", text.strip())
+                                for text in b_group_values ]
+            for i in range(len(a_group_values)):
+                a_group[i] = apply_sub(a_group[i], b_group_values[i])
+            page.window.close()
+
+        def handle_quit_btn(e):
             parameter["quit_split_line_section"] = True
-            split_window.close()
             for g in range(len(a_group)):
                 a_group[g] = apply_sub(a_group[g], b_group[g])
-            return a_group
-        if event == "Swap":
-            temp_swap = values[f"b_group_0"]
-            e = 1
-            while True:
-                try:
-                    split_window[f"b_group_{e - 1}"].update(values[f"b_group_{e}"])
-                    e += 1
-                except:
-                    split_window[f"b_group_{e - 1}"].update(temp_swap)
-                    break
-        if event == "Combine":
-            temp_comb = values[f"b_group_0"]
-            e = 1
-            while True:
-                try:
-                    temp_comb += " " + values[f"b_group_{e}"]
-                    e += 1
-                except:
-                    break
-            split_window[f"b_group_0"].update(temp_comb)
-            e = 1
-            while True:
-                try:
-                    values[f"b_group_{e}"]
-                    split_window[f"b_group_{e}"].update("")
-                    e += 1
-                except:
-                    break
-        if event == "Duplicate":
-            temp_dup = values[f"b_group_0"]
-            e = 1
-            while True:
-                try:
-                    values[f"b_group_{e}"]
-                    split_window[f"b_group_{e}"].update(temp_dup)
-                    e += 1
-                except:
-                    break
-        if event == "Copy timed_sub":
-            e = 0
-            while True:
-                try:
-                    values[f"b_group_{e}"]
-                    split_window[f"b_group_{e}"].update(values[f"a_group_{e}"])
-                    e += 1
-                except:
-                    break
-        if event == "Ok":
-            # Get data from GUI
-            e = 0
-            a_group_result = []
-            while f"a_group_{e}" in values.keys():
-                a_group_result += [values[f"a_group_{e}"]]
-                e += 1
-            e = 0
-            b_group_result = []
-            while f"b_group_{e}" in values.keys():
-                temp = values[f"b_group_{e}"]
-                if len(temp) >= 1:
-                    if " " == temp[0]: temp = temp[1:]
-                    if " " == temp[-1]: temp = temp[:-1]
-                    if "\n" == temp[-1]: temp = temp[:-1]
-                b_group_result += [temp]
-                e += 1
-            # Remove all tags in b_group_result
-            b_group_result = [re.sub(r"\{[^\{\\\}]*\\[^\{\}]+\}","",ga) for ga in b_group_result ]
+            page.window.close()
+            
+        # Layout
+        content = ft.Column( controls = [ft.Row(
+                controls=[
+                    ft.Column(
+                        controls= [ ft.Text("Timed sub") ] + a_group_list,
+                        scroll=ft.ScrollMode.AUTO, expand=True
+                    ),
+                    graph1,
+                    ft.Container(width=5, height=120, bgcolor="white"),
+                    graph2,
+                    ft.Column(
+                        controls= [ft.Text("OCR sub")] + b_group_list,
+                        scroll=ft.ScrollMode.AUTO, expand=True
+                    ),
+                ], expand=True, alignment = ft.MainAxisAlignment.START
+            )] , scroll=ft.ScrollMode.AUTO )
 
-            for i in range(len(a_group_result)):
-                a_group[i] = apply_sub(a_group[i], b_group_result[i])
-            break
-    split_window.close()
+        log_txt = ft.Text("(Aegisub tags will be auto transferred)")
+        swap_btn = ft.Button("Swap", on_click=handle_swap)
+        combine_btn = ft.Button("Combine", on_click=handle_combine)
+        dup_btn = ft.Button("Duplicate", on_click=handle_duplicate)
+        copy_btn = ft.Button("Copy timed_sub", on_click=handle_copy_timed)
+        ok_btn = ft.Button("Ok", on_click=handle_ok)
+        cancel_btn = ft.Button("Cancel", on_click=lambda _: page.window.close())
+        quit_btn = ft.Button("Quit section + Apply all", on_click=handle_quit_btn)
+        con_ex = ft.Container(expand=True)
+        con = ft.Container(width=15, height=10)
+
+        real_content = ft.Container(
+            content=ft.Column(
+                [   content,
+                    con,
+                    ft.Row([log_txt,con_ex, swap_btn, con, combine_btn, con, dup_btn, con, copy_btn ], 
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN, tight=50),
+                    con,
+                    ft.Row([ok_btn,cancel_btn,quit_btn], alignment=ft.MainAxisAlignment.END, spacing=10),
+                ],
+                spacing=2
+            ),
+            padding=ft.padding.all(10),
+        )
+
+        # Add everything to the page
+        page.add( real_content)
+    ft.app(target=split_page)
+
     return a_group
 
-
 def check_spelling(stri):
-    toteti = stri.replace("0", "").replace("1", "").replace("2", "").replace("3", "").replace("4", "").replace("5",
-                                                                                                               "").replace(
-        "6", "").replace("7", "").replace("8", "").replace("9", "")
-    if len(toteti) == 0:
+    if len(stri) == 0:
         return [stri, True]
-
-    suggestions = sym_spell.lookup(stri.lower(),
-                                   Verbosity.CLOSEST, max_edit_distance=2, include_unknown=True)
-    result = suggestions[0]
+    suggestions = sym_spell.lookup(stri.lower(),Verbosity.CLOSEST,transfer_casing=False,max_edit_distance=2)
+    try:
+        result = suggestions[0]
+    except:
+        return [stri, False]
     if result.term.lower() == stri.lower():
         return [stri, True]
     else:
@@ -613,16 +768,27 @@ def convert_actor(va):
 #### ------------------------------------- START ------------------------------------- #####
 ############################################################################################
 
-
 if parameter["is_spell_checker"]:
     from symspellpy import SymSpell, Verbosity
 
     sym_spell = SymSpell()
-    for dic_name in config["Dictionaries"]["name"].split("|"):
+    #Load Dictionaries
+    for dic_name in default_config["Dictionaries"]["name"].split("|"):
         dictionary_path = join("dictionaries", dic_name+".txt")
-        for enc in config["Dictionaries"]["encode"].split("|"):
+        for enc in default_config["Dictionaries"]["encode"].split("|"):
             try:
                 sym_spell.load_dictionary(dictionary_path, 0, 1, encoding=enc)
+                print("Loaded ",dic_name, " dictionary.")
+                break
+            except:
+                pass
+    #Load Bigram_Dictionaries
+    for dic_name in default_config["Dictionaries"]["bigram_name"].split("|"):
+        if dic_name=="": continue
+        dictionary_path = join("dictionaries", dic_name+".txt")
+        for enc in default_config["Dictionaries"]["encode"].split("|"):
+            try:
+                sym_spell.load_bigram_dictionary(dictionary_path, 0, 1, encoding=enc)
                 print("Loaded ",dic_name, " dictionary.")
                 break
             except:
@@ -637,7 +803,7 @@ if parameter["is_using_sushi"]:
     if temp_check != 0:
         print("Some error from sushi.exe. \n  - Please put the 'sushi.exe' in the same location as .EXE file\n  - Make sure ffmpeg is installed.")
         system("pause")
-        exit()
+        sys.exit()
 
 else:
     ocr_sub_sushi_path = parameter["ocr_sub_path"]
@@ -655,7 +821,7 @@ for i_s in range(len(eng_sub)):
 eng_signs = []
 i_eng = 0
 while i_eng < len(eng_sub):
-    if any(["\\" + tag + "(" in eng_sub[i_eng].text for tag in ["pos", "move", "org", "clip"]]) and not eng_sub[
+    if any(["\\" + tag + "(" in eng_sub[i_eng].text for tag in parameter["ass_sign_tags"] ]) and not eng_sub[
         i_eng].is_comment:
         eng_sub[i_eng].name = eng_sub[i_eng].name+"__tag:sign"
         eng_signs += [eng_sub[i_eng]]
@@ -791,45 +957,145 @@ if parameter["is_spell_checker"]:
         if temp_res > 0:
             line_need_correction += [[i_ocr, temp, ocr_sub[i_ocr].text]]
 
+        # # Chia thành các mảng
+        # temp = re.findall(
+        #     r"|[^\s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]+|[ \s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]",
+        #     ocr_sub[i_ocr].text.replace("\\N", "\n"))
+        # print(temp)
+        # for t in range(len(temp)):
+        #     # Lọc các word có 1 ký tự
+        #     tpattern = r'[a-zA-Z0-9\s!\"#$%&\'()*+,\-./:;<=>?@\[\]^_`\{\|\}\\~'+re.escape(list_characters)+r"]"
+        #     if len(temp[t]) == 1 and re.search( tpattern , temp[t]):
+        #         # Các word 1 ký tự là dấu câu hoặc số
+        #         if re.search(
+        #                 r"[\s()\"!,\'\-.;?_~a-zA-Z0-9%s]" % re.escape(list_characters),
+        #                 temp[t]):
+        #             temp[t] = [temp[t], True]
+        #         else:
+        #             temp[t] = [temp[t], False]
+        #     else:
+        #         sug = check_spelling(temp[t])
+        #         temp[t] = sug
 
-    spelling_layout = [[sg.Push(), sg.Text('Double check pls...'), sg.Push()],
-                       [sg.Multiline(key=f"spelling", size=(70, 20), default_text="")],
-                       [sg.Push(), sg.Button('Ok'), sg.Button('Cancel change'), sg.Push()]]
+        # temp_res = len(temp) - sum([int(g[1]) for g in temp])
+        # if temp_res > 0:
+        #     line_need_correction += [[i_ocr, temp, ocr_sub[i_ocr].text]]
 
-    spelling_window = sg.Window('Spelling check', spelling_layout, finalize=True)
-    spelling_window.bind("<Escape>", "ESCAPE")
+    from flask import Flask, render_template_string, request, jsonify
+    app_spelling_check = Flask(__name__)
+    HTML_TEMPLATE = """
+    <!DOCTYPE html><html><head><title>Spelling Check</title><style>.container{max-width:800px;margin:20px auto;padding:20px}.text-area{width:100%;height:500px;margin:20px 0}.grey-text{color:#999}.red-text{color:red}.buttons{text-align:center;margin-top:20px}button{padding:10px 20px;margin:0 10px}#spelling{height:80vh;overflow-y:scroll}</style></head><body><div class="container"><h2 style="text-align:center">Double check pls...</h2><div id="spelling" class="text-area" , contenteditable="true">initial_text</div><div class="buttons"><button onclick="submitChanges()">Ok</button><button onclick="cancelChanges()">Cancel change</button></div></div><script>document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                window.close();
+            }
+        });
+        function cancelChanges() {
+            fetch('/cancel', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: "a"
+            });
+            window.close();
+        }
+        function submitChanges() {
+            const textArea = document.getElementById('spelling');
+            fetch('/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: textArea.innerHTML
+                })
+            });
+            alert("success, press okie to close webpage");
+            window.close();
+        }</script></body></html>"""
 
-    for lin in line_need_correction:
-        spelling_window['spelling'].print(f"[{lin[0]}]", end='', text_color='black')
-        spelling_window['spelling'].print('\n', end='')
-        spelling_window['spelling'].print(f"[{lin[2]}]", end='', text_color='grey60')
-        spelling_window['spelling'].print('\n', end='')
-        for sp in lin[1]:
-            if sp[1]:
-                spelling_window['spelling'].print(sp[0], end='', text_color='black')
-            else:
-                spelling_window['spelling'].print(sp[0], end='', text_color='red')
-        spelling_window['spelling'].print('\n\n', end='')
+    import webbrowser, threading, sys
+    from werkzeug.serving import run_simple
+    class ServerThread(threading.Thread):
+        def __init__(self, app):
+            threading.Thread.__init__(self)
+            self.srv = None  # Initialize server attribute
+            self.app = app
+            self.ctx = app.app_context()
+            self.ctx.push()
 
-    while True:
-        event, values = spelling_window.read()
-        # See if user wants to quit or window was closed
-        if event in (sg.WINDOW_CLOSED, "ESCAPE", "Cancel change"):
-            spelling_window.close()
-            break
-        if event == "Ok":
-            data_spelling = values[f"spelling"].replace("\r", "")
-            data_spelling = re.findall(r"\[([0-9]+)](\n\[[^]\[]+])?\n([^\[\]]+)", data_spelling + "\n\n")
+        def run(self):
+            self.srv = run_simple('127.0.0.1', 5000, self.app, use_debugger=False)
+            self.srv.serve_forever()
+            
+        def shutdown(self):
+            if self.srv:
+                self.srv.shutdown()
+                self.srv = None
 
-            for da in data_spelling:
-                temp_da = [dq for dq in da if "[" not in dq and "]" not in dq and dq != "\n"]
-                if len(temp_da) == 0:
-                    temp_da = ""
-                else:
-                    temp_da = max(temp_da, key=len)
-                ocr_sub[int(da[0])].text = temp_da.lstrip().rstrip().replace("\n", "\\N")
-            spelling_window.close()
-            break
+    class ServerManager:
+        def __init__(self):
+            self.server = None
+
+        def start_server(self):
+            app = Flask('app_spelling_check')
+            
+            @app.route('/')
+            def index_spelling_check():
+                initial_text = []
+                for lin in line_need_correction:
+                    initial_text.append(f"[{lin[0]}]")
+                    initial_text.append(f"<span class='grey-text' contenteditable = false>[{lin[2]}]</span>")
+                    
+                    spell_line = ''
+                    for sp in lin[1]:
+                        if sp[1]:  # if correct
+                            spell_line += sp[0]
+                        else:  # if incorrect
+                            spell_line += f"<span class='red-text'>{sp[0]}</span>"
+                    initial_text.append(spell_line)
+                    initial_text.append('')  # Empty line for spacing
+                return HTML_TEMPLATE.replace("initial_text", '<br>'.join(initial_text))
+
+            @app.route('/submit', methods=['POST'])
+            def submit_spelling_check():
+                data = request.json
+                data_spelling = data['text'].replace("\r", "")
+                data_spelling = data_spelling.replace("<br>","\n")
+                data_spelling = data_spelling.replace("</span>","")
+                data_spelling = re.sub(r'<span class="[^\"]+"( contenteditable\=\"false\")*>',"", data_spelling)
+                data_spelling = re.findall(r"\[([0-9]+)](\n\[[^]\[]+])?\n([^\[\]]+)", data_spelling + "\n\n")
+                
+                for da in data_spelling:
+                    temp_da = [dq for dq in da if "[" not in dq and "]" not in dq and dq != "\n"]
+                    if len(temp_da) == 0:
+                        temp_da = ""
+                    else:
+                        temp_da = max(temp_da, key=len)
+                    ocr_sub[int(da[0])].text = temp_da.lstrip().rstrip().replace("\n", "\\N")
+                
+                self.stop_server()
+                return jsonify({"success": True})
+
+            @app.route('/cancel', methods=['POST'])
+            def cancel_spelling_check():
+                self.stop_server()
+                return jsonify({"success": True})
+
+            self.server = ServerThread(app)
+            self.server.start()
+
+        def stop_server(self):
+            if self.server:
+                sys.exit()
+
+    # Usage
+    if __name__ == '__main__':
+        manager = ServerManager()
+        webbrowser.open('http://127.0.0.1:5000')
+        manager.start_server()
+        if manager.server:
+            manager.server.join()
 
 i_ocr = 0
 while i_ocr < len(ocr_sub):
@@ -837,10 +1103,6 @@ while i_ocr < len(ocr_sub):
         del ocr_sub[i_ocr]
     else:
         i_ocr += 1
-
-
-
-
 
 
 ########################################## MAIN PART ##########################################
@@ -1041,23 +1303,6 @@ def grouping_signs(group):
         line = pysubs2.SSAEvent(start=start , end=end , text = str(len(temp_group)).zfill(4))
         temp_group += [{ "id":len(temp_group), "start":start, "end":end, "line":line, "group":gr}]
         gr = []
-    # temp_i = 0
-    # while True:
-    #     ahaha = False
-    #     for i in range(temp_i+1,len(temp_group)):
-    #         temp_same_time = cal_same_time(temp_group[temp_i]["line"],temp_group[i]["line"])
-    #         if same_time > duration(temp_group[temp_i]["line"])*parameter["same_rate"] or \
-    #         same_time > duration(temp_group[i]["line"])*parameter["same_rate"] or \
-    #         is_continue_time(temp_group[temp_i]["line"],temp_group[i]["line"]):
-    #             temp_group[temp_i]["group"]+=temp_group[i]["group"]
-    #             print(temp_i)
-    #             del temp_group[i]
-    #             ahaha = True
-    #             break
-    #     if not ahaha:
-    #         temp_i+=1
-    #     if temp_i == len(temp_group):
-    #         break
     return temp_group
 
 
@@ -1066,8 +1311,24 @@ if not parameter["is_transfer_sign"] and len(ocr_signs)>0:
         best_subtitle += [sign]
 else:
     if len(eng_signs)>0:
-        add_signs_timed_sub = sg.popup_yes_no("Do you want add signs from timed sub?\n(Signs will add as comment)")
-        if add_signs_timed_sub=="No" or add_signs_timed_sub==None:
+        parameter["add_signs_timed_sub"] = True
+        def popup_page(page: ft.Page):
+            page.window.width = 350
+            page.window.height = 200
+            def close_dialog(response):
+                parameter["add_signs_timed_sub"] = response
+                page.window.close()
+
+            page.add(
+                ft.Column( controls = [
+                    ft.Text("Do you want add signs from timed sub?\n(Signs will add as comment)"),
+                    ft.Row( controls = [ ft.TextButton("Yes", on_click=lambda _: close_dialog(True) ),
+                                             ft.TextButton("No", on_click=lambda _: close_dialog(False)),
+                                        ], alignment=ft.MainAxisAlignment.CENTER ), ]) )
+
+        ft.app(target=popup_page)
+
+        if parameter["add_signs_timed_sub"]=="No" or parameter["add_signs_timed_sub"]==None:
             pass
         else:
             for sign in eng_signs:
@@ -1079,8 +1340,8 @@ else:
     step_id = 2
 
     if len(ocr_signs)>0:
-        shift_signs = sg.popup_yes_no("Shift signs from ocr_sub feature has to compare multi frames and it will take a while.\nMake sure you choose video source instead of audio.\nDo you want to shift signs ?")
-        if shift_signs=="No" or shift_signs==None:
+        parameter["shift_signs"] = sg.popup_yes_no("Shift signs from ocr_sub feature has to compare multi frames and it will take a while.\nMake sure you choose video source instead of audio.\nDo you want to shift signs ?")
+        if parameter["shift_signs"]=="No" or parameter["shift_signs"]==None:
             # Add ocr_signs
             for ocr_sign in ocr_signs:
                 ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign.name)}
@@ -1156,7 +1417,6 @@ else:
                 # cv2.imshow("a",vis)
                 # cv2.waitKey(0) 
 
-                #Video1
                 while True:
                     start_set_video1 = start_shift_time - frame_range/fps1*1000
                     if start_set_video1<0:
@@ -1237,8 +1497,8 @@ write_sub.save(parameter["output_filename"])
 
 print("DONE :v")
 
-window.close()
-system("pause")
+# window.close()
+# system("pause")
 
 
 

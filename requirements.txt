@@ -4,3 +4,5 @@ Requests
 setuptools
 symspellpy
 textdistance
+flet
+ImageHash
