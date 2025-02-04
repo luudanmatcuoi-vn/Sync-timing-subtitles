@@ -1,8 +1,10 @@
-PySimpleGUI
-pysubs2
 Requests
 setuptools
-symspellpy
-textdistance
+pysubs2
 flet
-ImageHash
+scikit-image
+opencv-python
+textdistance
+colour
+tqdm
+PyYAML

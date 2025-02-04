@@ -2,27 +2,26 @@
 # yt link   : https://www.youtube.com/channel/UCdyAb9TAX1qQ5R2-c91-x8g
 # GitHub link  : https://github.com/luudanmatcuoi-vn
 
-import yaml, sys, pysubs2, re, argparse, requests, textdistance
+import sys, re, argparse, requests
+import sushi, yaml, pysubs2, textdistance
 from colour import Color
 from os import system, remove
 from os.path import isfile, join, splitext
+import flet as ft
+from flet_core.control_event import ControlEvent
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 sys.stdout.reconfigure(encoding='utf-8')
 
-import PySimpleGUI as sg
-import flet as ft
-from flet_core.control_event import ControlEvent
-
 try:
     req = requests.get("https://gist.github.com/luudanmatcuoi-vn/208833abf603e417efe1e6ccbb1be4f3")
-    if "Allow" in req.text:
+    if "ALLOW2.0.0" in req.text:
         pass
     else:
-        print("Too old to work :v ")
+        input("Too old to work :v Pls update...")
         sys.exit()
 except:
-    print("Too old to work :v ")
+    print("Connect internet pls :3")
     sys.exit()
 
 with open("default.yaml", encoding="utf-8") as f:
@@ -33,7 +32,6 @@ with open("recent.yaml", encoding="utf-8") as f:
 def get_para_from_recent(default = False):
     if default:
         parameter = dict(default_config)
-        parameter.pop('Dictionaries', None)
         parameter.pop('Tooltip', None)
     else:
         parameter = dict(recent_config)
@@ -91,7 +89,7 @@ for ta in parameter.keys():
     else:
         parser.add_argument('--'+ta , type=str)
 
-args = parser.parse_args() # get arguments from command line
+args = parser.parse_args()
 args = vars(args)
 for g in args:
     if args[g] is not None:
@@ -133,6 +131,14 @@ class FileInputControl(ft.UserControl):
     def on_change(self, e):
         self.text_value = self.text_field.value
 
+    @value.setter
+    def setdisabled(self, e):
+        self.disabled = e
+        self.text_field.disabled = e
+        self.pick_button.disabled = e
+        self.text_field.update()
+        self.pick_button.update()
+
     def pick_files_result(self, e: ft.FilePickerResultEvent):
         if e.files:
             selected_files = [file.path for file in e.files]
@@ -157,12 +163,23 @@ class FileInputControl(ft.UserControl):
         return ft.Stack( [ self.file_picker, self.text_field ] )
 
 def main_window(page: ft.Page):
-    page.title = 'Transfer timing subtitles by luudanmatcuoi v1.3.0'
+    page.title = 'Transfer timing subtitles by luudanmatcuoi v2.0.0'
     page.window.min_width = 800
     page.padding = 10
     page.window.icon = "dango.ico"
     page.size = 10
     page.scroll = "auto"
+    page.window.center()
+
+    def handle_window_event(e):
+        if e.data == "close":
+            global quit
+            quit = True
+            page.window.prevent_close = False
+            page.window.close()
+
+    page.window.prevent_close = True
+    page.window.on_event = handle_window_event
 
     def pick_files(e, file_type, control_to_update):
         file_picker = ft.FilePicker(
@@ -174,24 +191,33 @@ def main_window(page: ft.Page):
         )
 
     def on_sushi_change(e):
-        origin_audio_input.disabled = not e.control.value
-        ocr_audio_input.disabled = not e.control.value
+        origin_audio_input.setdisabled = not e.control.value
+        ocr_audio_input.setdisabled = not e.control.value
+        if not e.control.value:
+            sync_sign_ocr_sub_cb.value = False
+            sync_sign_ocr_sub_cb.disabled = True
+        if e.control.value and using_sign_ocr_sub_cb.value:
+            sync_sign_ocr_sub_cb.disabled = False
         page.update()
 
-    def on_tag_change(e):
+    def on_tag_change_timed(e):
         if e.control.value:
-            transfer_sign_cb.value = False
-            transfer_sign_cb.disabled = True
+            cmt_sign_timed_sub_cb.disabled = False
         else:
-            transfer_sign_cb.disabled = False
+            cmt_sign_timed_sub_cb.disabled = True
+            cmt_sign_timed_sub_cb.value = False
         page.update()
 
-    def on_sign_change(e):
+    def on_tag_change_ocr(e):
         if e.control.value:
-            remove_tag_cb.value = False
-            remove_tag_cb.disabled = True
+            cmt_sign_ocr_sub_cb.disabled = False
+            if sushi_cb.value:
+                sync_sign_ocr_sub_cb.disabled = False
         else:
-            remove_tag_cb.disabled = False
+            cmt_sign_ocr_sub_cb.disabled = True
+            cmt_sign_ocr_sub_cb.value = False
+            sync_sign_ocr_sub_cb.disabled = True
+            sync_sign_ocr_sub_cb.value = False
         page.update()
 
     def reset_settings(e):
@@ -221,11 +247,13 @@ def main_window(page: ft.Page):
                 logging_text.value = msg
             page.update()
         else:
+            page.window.prevent_close = False
             page.window.close()
 
     def on_quit(e):
         global quit
         quit = True
+        page.window.prevent_close = False
         page.window.close()
 
     def slider_change(e,element):
@@ -239,11 +267,11 @@ def main_window(page: ft.Page):
     origin_sub_input = FileInputControl(label="Timed sub", value=parameter["origin_sub_path"], 
         icon = "file", tooltip="origin_sub_path" )
     origin_audio_input = FileInputControl(label="Audio/video", value=parameter["origin_audio_path"], 
-        disabled=not parameter["is_using_sushi"], tooltip="origin_audio_path", icon = "audio" )
+        disabled = not parameter["is_using_sushi"], tooltip="origin_audio_path", icon = "audio" )
     ocr_sub_input = FileInputControl(label="OCR sub", value=parameter["ocr_sub_path"], 
         icon = "file", tooltip="ocr_sub_path" )
     ocr_audio_input = FileInputControl(label="Audio/video", value=parameter["ocr_audio_path"], 
-        disabled= not parameter["is_using_sushi"], icon="audio" , tooltip="ocr_audio_path" )
+        disabled = not parameter["is_using_sushi"], icon="audio" , tooltip="ocr_audio_path" )
     output_filename = ft.TextField(
         label="Output",
         value=parameter["output_filename"],
@@ -252,16 +280,21 @@ def main_window(page: ft.Page):
     )
     sushi_cb = ft.Checkbox( label="Using sushi auto sync based on audio", 
         value=parameter["is_using_sushi"], on_change=on_sushi_change, tooltip=mk_tooltip("is_using_sushi") )
-    spell_checker_cb = ft.Checkbox( label="Using spell checker", value=parameter["is_spell_checker"],
-        tooltip=mk_tooltip("is_spell_checker") )
     comment_timed_cb = ft.Checkbox( label="Timed sub", value=parameter["comment_timed_sub"], 
         tooltip=mk_tooltip("comment_timed_sub") )
     comment_ocr_cb = ft.Checkbox( label="OCR sub", value=parameter["comment_ocr_sub"],
         tooltip=mk_tooltip("comment_ocr_sub") )
-    remove_tag_cb = ft.Checkbox( label="Remove tags and signs in ocr sub", value=parameter["is_remove_tag"], 
-        on_change=on_tag_change, tooltip=mk_tooltip("is_remove_tag") )
-    transfer_sign_cb = ft.Checkbox( label="Using signs in ocr_sub", value=parameter["is_transfer_sign"], 
-        on_change=on_sign_change, tooltip=mk_tooltip("is_transfer_sign") )
+    
+    using_sign_timed_sub_cb = ft.Checkbox( label="Use timed sub", value=parameter["is_use_sign_timed"], 
+        on_change=on_tag_change_timed, tooltip=mk_tooltip("is_use_sign_timed") )
+    cmt_sign_timed_sub_cb = ft.Checkbox( label="comment it", value=parameter["is_cmt_sign_timed"],
+        tooltip=mk_tooltip("is_cmt_sign_timed") )
+    using_sign_ocr_sub_cb = ft.Checkbox( label="Use OCR sub", value=parameter["is_use_sign_ocr"], 
+        on_change=on_tag_change_ocr, tooltip=mk_tooltip("is_use_sign_ocr") )
+    cmt_sign_ocr_sub_cb = ft.Checkbox( label="comment it", value=parameter["is_cmt_sign_ocr"], 
+        tooltip=mk_tooltip("is_cmt_sign_ocr") )
+    sync_sign_ocr_sub_cb = ft.Checkbox( label="sync it (must select video)", value=parameter["is_sync_sign_ocr"], 
+        tooltip=mk_tooltip("is_sync_sign_ocr") )
     same_rate = ft.Slider( on_change= lambda e:slider_change(e,same_rate), min=0, max=100, value=parameter["same_rate"], 
         divisions=100, expand=True, tooltip=mk_tooltip("same_rate") )
     distance_string_rate = ft.Slider( on_change= lambda e:slider_change(e,distance_string_rate), min=0, max=100, 
@@ -292,11 +325,13 @@ def main_window(page: ft.Page):
         "ocr_audio_path": ocr_audio_input,
         "output_filename": output_filename,
         "is_using_sushi": sushi_cb,
-        "is_spell_checker": spell_checker_cb,
         "comment_timed_sub": comment_timed_cb,
         "comment_ocr_sub": comment_ocr_cb,
-        "is_remove_tag": remove_tag_cb,
-        "is_transfer_sign": transfer_sign_cb,
+        "is_use_sign_timed": using_sign_timed_sub_cb,
+        "is_cmt_sign_timed": cmt_sign_timed_sub_cb,
+        "is_use_sign_ocr": using_sign_ocr_sub_cb,
+        "is_cmt_sign_ocr": cmt_sign_ocr_sub_cb,
+        "is_sync_sign_ocr": sync_sign_ocr_sub_cb,
         "same_rate": same_rate,
         "distance_string_rate": distance_string_rate,
         "distance_string_character": distance_string_character,
@@ -323,10 +358,11 @@ def main_window(page: ft.Page):
                     spacing=10, ), margin=ft.margin.only(bottom=20)
                 ),
                 output_filename,
-                ft.Row([sushi_cb, spell_checker_cb, empty ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Row([ft.Text("Comment lines that only appear in: "), comment_timed_cb, comment_ocr_cb]),
-                remove_tag_cb,
-                transfer_sign_cb,
+                ft.Row([sushi_cb ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Row([ft.Text("For Dialogue, comment lines that only appear in: "), comment_timed_cb, comment_ocr_cb]),
+                ft.Row([ft.Text("For Sign: ")]),
+                ft.Row([using_sign_timed_sub_cb, cmt_sign_timed_sub_cb]),
+                ft.Row([using_sign_ocr_sub_cb, cmt_sign_ocr_sub_cb, sync_sign_ocr_sub_cb]),
                 ft.ExpansionTile(
                     title=ft.Text("Addition parameters", size=16, weight=ft.FontWeight.BOLD),
                     subtitle=ft.Text("Change it if subtitle not sync probably"),
@@ -362,7 +398,8 @@ def main_window(page: ft.Page):
 if run_mode:
     ft.app(target = main_window)
     if "quit" in globals():
-        exit()
+        if quit:
+            exit()
 
 def split_line(stri):
     # remove \N ở đầu câu
@@ -505,9 +542,11 @@ def apply_sub(a_line, text):
     text = text.replace("\n","\\N")
     text = text.replace("\\n","\\N")
     # throw all aegisub tag {} -> [] in a_line
-    temp = re.sub(r"\{([^\\]+)}", r"[\1]", a_line.text)
+    # temp = re.sub(r"\{([^\\]+)}", r"[\1]", a_line.text)
+    temp = a_line.text.replace("{","[").replace("}","]")
+    temp = re.sub(r"\[(\\[^\]]+)\]", r"{\1}", temp)
 
-    match = re.findall(r"(({[^{}]+})?([^{}]+)?({[^{}]+})?)+", temp)
+    match = re.findall(r"({[^{}]+})?([^{}]+)?", temp)
     temp = ""
     for t in match:
         for m in t:
@@ -723,26 +762,6 @@ def split_sub(a_group, b_group):
 
     return a_group
 
-def check_spelling(stri):
-    if len(stri) == 0:
-        return [stri, True]
-    suggestions = sym_spell.lookup(stri.lower(),Verbosity.CLOSEST,transfer_casing=False,max_edit_distance=2)
-    try:
-        result = suggestions[0]
-    except:
-        return [stri, False]
-    if result.term.lower() == stri.lower():
-        return [stri, True]
-    else:
-        if stri[0].isupper():
-            if any(ext in stri for ext in list_characters):
-                result.term = result.term[0].upper() + result.term[1:]
-                return [result.term, False]
-            else:
-                return [stri, True]
-        else:
-            return [result.term, False]
-
 def convert_actor(va):
     if isinstance(va, str):
         res = {}
@@ -768,43 +787,16 @@ def convert_actor(va):
 #### ------------------------------------- START ------------------------------------- #####
 ############################################################################################
 
-if parameter["is_spell_checker"]:
-    from symspellpy import SymSpell, Verbosity
-
-    sym_spell = SymSpell()
-    #Load Dictionaries
-    for dic_name in default_config["Dictionaries"]["name"].split("|"):
-        dictionary_path = join("dictionaries", dic_name+".txt")
-        for enc in default_config["Dictionaries"]["encode"].split("|"):
-            try:
-                sym_spell.load_dictionary(dictionary_path, 0, 1, encoding=enc)
-                print("Loaded ",dic_name, " dictionary.")
-                break
-            except:
-                pass
-    #Load Bigram_Dictionaries
-    for dic_name in default_config["Dictionaries"]["bigram_name"].split("|"):
-        if dic_name=="": continue
-        dictionary_path = join("dictionaries", dic_name+".txt")
-        for enc in default_config["Dictionaries"]["encode"].split("|"):
-            try:
-                sym_spell.load_bigram_dictionary(dictionary_path, 0, 1, encoding=enc)
-                print("Loaded ",dic_name, " dictionary.")
-                break
-            except:
-                pass
-
 ### Sushi to sync sub by audio
 if parameter["is_using_sushi"]:
+    class Sushi_args_obj: window=10; max_window=30; rewind_thresh=5; grouping=True; max_kf_distance=2; kf_mode='all'; smooth_radius=3; max_ts_duration=1001.0/24000.0*10; max_ts_distance=1001.0/24000.0*10; plot_path=None; sample_type='uint8'; sample_rate=12000; src_audio_idx=None; src_script_idx=None; dst_audio_idx=None; cleanup=True; temp_dir=None; chapters_file=None; dst_keyframes=None; src_keyframes=None; dst_fps=None; src_fps=None; dst_timecodes=None; src_timecodes=None; verbose=False
     ocr_sub_sushi_path = "ocr_sushi."+parameter["ocr_sub_path"][-3:]
-    temp_check = system(
-        'sushi.exe --src "{ocr_audio_path}" --dst "{origin_audio_path}" --script "{ocr_sub_path}" -o ocr_sushi.'
-        .format(  **parameter) + parameter["ocr_sub_path"][-3:])
-    if temp_check != 0:
-        print("Some error from sushi.exe. \n  - Please put the 'sushi.exe' in the same location as .EXE file\n  - Make sure ffmpeg is installed.")
-        system("pause")
-        sys.exit()
-
+    sushi_args = Sushi_args_obj()
+    sushi_args.source = parameter["ocr_audio_path"]
+    sushi_args.destination = parameter["origin_audio_path"]
+    sushi_args.script_file = parameter["ocr_sub_path"]
+    sushi_args.output_script = ocr_sub_sushi_path
+    sushi.run(sushi_args)
 else:
     ocr_sub_sushi_path = parameter["ocr_sub_path"]
 
@@ -812,12 +804,12 @@ else:
 eng_sub = pysubs2.load(parameter["origin_sub_path"])
 ocr_sub = pysubs2.load(ocr_sub_sushi_path)
 
-# Chèn object vào actor của eng_sub
+# Import dictionary type to eng_sub actor
 for i_s in range(len(eng_sub)):
     old_name = eng_sub[i_s].name
     eng_sub[i_s].name = convert_actor( {"oldname":old_name, "id":str(i_s+1)} )
 
-# Nhặt tất cả dialogue sign ra khỏi eng_sub
+# Eliminate all 'dialogue sign' line from eng_sub
 eng_signs = []
 i_eng = 0
 while i_eng < len(eng_sub):
@@ -829,7 +821,7 @@ while i_eng < len(eng_sub):
     else:
         i_eng += 1
 
-# Nhặt tất cả comment ra khỏi eng_sub
+# Eliminate all comment line from eng_sub
 comment_group = []
 i_eng = 0
 while i_eng < len(eng_sub):
@@ -848,10 +840,13 @@ else:
     layer_eng_sub = 0
 
 # Filter sub ocr : Remove empty lines, filter rules (find and replace), Caution unexpected characters
-f = open('filter_rules.txt', "r", encoding="utf8")
-rules = [g.replace("\\n", "\\\\N") for g in f.read().split("\n") if len(g) > 0]
-rules = [g.split("________") for g in rules if "#" not in g[0]]
-f.close()
+try:
+    f = open('filter_rules.txt', "r", encoding="utf8")
+    rules = [g.replace("\\n", "\\\\N") for g in f.read().split("\n") if len(g) > 0]
+    rules = [g.split("________") for g in rules if "#" not in g[0]]
+    f.close()
+except:
+    rules = []
 
 # Check if characters parameter in config.ini is right
 tempa = "".join([t.text for t in ocr_sub ]).replace(" ","").replace("\\N","").replace("\n","")
@@ -868,19 +863,11 @@ ocr_signs = []
 while i_ocr < len(ocr_sub):
     if ocr_sub[i_ocr].is_comment:
         del ocr_sub[i_ocr]
-    # Remove tags in ocr_sub
-    if parameter["is_remove_tag"]:
-        if any(["\\" + tag + "(" in ocr_sub[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
-            ocr_signs += [ocr_sub[i_ocr]]
-            del ocr_sub[i_ocr]
-            continue
-        ocr_sub[i_ocr].text = re.sub(r"\{[^\{\\\}]*\\[^\{\}]+\}","",ocr_sub[i_ocr].text)
-    else:
-        if any(["\\" + tag + "(" in ocr_sub[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
-            ocr_signs += [ocr_sub[i_ocr]]
-            del ocr_sub[i_ocr]
-            continue
-
+        if i_ocr == len(ocr_sub): continue
+    if any(["\\" + tag + "(" in ocr_sub[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
+        ocr_signs += [ocr_sub[i_ocr]]
+        del ocr_sub[i_ocr]
+        continue
     for r in rules:
         if r[0] == "replace":
             if "\\u" in r[1]:
@@ -930,180 +917,12 @@ while i_ocr < len(ocr_sub):
     else:
         i_ocr += 1
 
-###Block detect and fix spell checker
-if parameter["is_spell_checker"]:
-    line_need_correction = []
-    for i_ocr in range(len(ocr_sub)):
-        # Chia thành các mảng
-        temp = re.findall(
-            r"|[^\s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]+|[ \s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]",
-            ocr_sub[i_ocr].text.replace("\\N", "\n"))
-        for t in range(len(temp)):
-            # Lọc các word có 1 ký tự
-            tpattern = r'[a-zA-Z0-9\s!\"#$%&\'()*+,\-./:;<=>?@\[\]^_`\{\|\}\\~'+re.escape(list_characters)+r"]"
-            if len(temp[t]) == 1 and re.search( tpattern , temp[t]):
-                # Các word 1 ký tự là dấu câu hoặc số
-                if re.search(
-                        r"[\s()\"!,\'\-.;?_~a-zA-Z0-9%s]" % re.escape(list_characters),
-                        temp[t]):
-                    temp[t] = [temp[t], True]
-                else:
-                    temp[t] = [temp[t], False]
-            else:
-                sug = check_spelling(temp[t])
-                temp[t] = sug
-
-        temp_res = len(temp) - sum([int(g[1]) for g in temp])
-        if temp_res > 0:
-            line_need_correction += [[i_ocr, temp, ocr_sub[i_ocr].text]]
-
-        # # Chia thành các mảng
-        # temp = re.findall(
-        #     r"|[^\s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]+|[ \s!\"#$%&\\\'()*+,\-./:;<=>?@\[\\\\\]^_`{|}~]",
-        #     ocr_sub[i_ocr].text.replace("\\N", "\n"))
-        # print(temp)
-        # for t in range(len(temp)):
-        #     # Lọc các word có 1 ký tự
-        #     tpattern = r'[a-zA-Z0-9\s!\"#$%&\'()*+,\-./:;<=>?@\[\]^_`\{\|\}\\~'+re.escape(list_characters)+r"]"
-        #     if len(temp[t]) == 1 and re.search( tpattern , temp[t]):
-        #         # Các word 1 ký tự là dấu câu hoặc số
-        #         if re.search(
-        #                 r"[\s()\"!,\'\-.;?_~a-zA-Z0-9%s]" % re.escape(list_characters),
-        #                 temp[t]):
-        #             temp[t] = [temp[t], True]
-        #         else:
-        #             temp[t] = [temp[t], False]
-        #     else:
-        #         sug = check_spelling(temp[t])
-        #         temp[t] = sug
-
-        # temp_res = len(temp) - sum([int(g[1]) for g in temp])
-        # if temp_res > 0:
-        #     line_need_correction += [[i_ocr, temp, ocr_sub[i_ocr].text]]
-
-    from flask import Flask, render_template_string, request, jsonify
-    app_spelling_check = Flask(__name__)
-    HTML_TEMPLATE = """
-    <!DOCTYPE html><html><head><title>Spelling Check</title><style>.container{max-width:800px;margin:20px auto;padding:20px}.text-area{width:100%;height:500px;margin:20px 0}.grey-text{color:#999}.red-text{color:red}.buttons{text-align:center;margin-top:20px}button{padding:10px 20px;margin:0 10px}#spelling{height:80vh;overflow-y:scroll}</style></head><body><div class="container"><h2 style="text-align:center">Double check pls...</h2><div id="spelling" class="text-area" , contenteditable="true">initial_text</div><div class="buttons"><button onclick="submitChanges()">Ok</button><button onclick="cancelChanges()">Cancel change</button></div></div><script>document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                window.close();
-            }
-        });
-        function cancelChanges() {
-            fetch('/cancel', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: "a"
-            });
-            window.close();
-        }
-        function submitChanges() {
-            const textArea = document.getElementById('spelling');
-            fetch('/submit', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    text: textArea.innerHTML
-                })
-            });
-            alert("success, press okie to close webpage");
-            window.close();
-        }</script></body></html>"""
-
-    import webbrowser, threading, sys
-    from werkzeug.serving import run_simple
-    class ServerThread(threading.Thread):
-        def __init__(self, app):
-            threading.Thread.__init__(self)
-            self.srv = None  # Initialize server attribute
-            self.app = app
-            self.ctx = app.app_context()
-            self.ctx.push()
-
-        def run(self):
-            self.srv = run_simple('127.0.0.1', 5000, self.app, use_debugger=False)
-            self.srv.serve_forever()
-            
-        def shutdown(self):
-            if self.srv:
-                self.srv.shutdown()
-                self.srv = None
-
-    class ServerManager:
-        def __init__(self):
-            self.server = None
-
-        def start_server(self):
-            app = Flask('app_spelling_check')
-            
-            @app.route('/')
-            def index_spelling_check():
-                initial_text = []
-                for lin in line_need_correction:
-                    initial_text.append(f"[{lin[0]}]")
-                    initial_text.append(f"<span class='grey-text' contenteditable = false>[{lin[2]}]</span>")
-                    
-                    spell_line = ''
-                    for sp in lin[1]:
-                        if sp[1]:  # if correct
-                            spell_line += sp[0]
-                        else:  # if incorrect
-                            spell_line += f"<span class='red-text'>{sp[0]}</span>"
-                    initial_text.append(spell_line)
-                    initial_text.append('')  # Empty line for spacing
-                return HTML_TEMPLATE.replace("initial_text", '<br>'.join(initial_text))
-
-            @app.route('/submit', methods=['POST'])
-            def submit_spelling_check():
-                data = request.json
-                data_spelling = data['text'].replace("\r", "")
-                data_spelling = data_spelling.replace("<br>","\n")
-                data_spelling = data_spelling.replace("</span>","")
-                data_spelling = re.sub(r'<span class="[^\"]+"( contenteditable\=\"false\")*>',"", data_spelling)
-                data_spelling = re.findall(r"\[([0-9]+)](\n\[[^]\[]+])?\n([^\[\]]+)", data_spelling + "\n\n")
-                
-                for da in data_spelling:
-                    temp_da = [dq for dq in da if "[" not in dq and "]" not in dq and dq != "\n"]
-                    if len(temp_da) == 0:
-                        temp_da = ""
-                    else:
-                        temp_da = max(temp_da, key=len)
-                    ocr_sub[int(da[0])].text = temp_da.lstrip().rstrip().replace("\n", "\\N")
-                
-                self.stop_server()
-                return jsonify({"success": True})
-
-            @app.route('/cancel', methods=['POST'])
-            def cancel_spelling_check():
-                self.stop_server()
-                return jsonify({"success": True})
-
-            self.server = ServerThread(app)
-            self.server.start()
-
-        def stop_server(self):
-            if self.server:
-                sys.exit()
-
-    # Usage
-    if __name__ == '__main__':
-        manager = ServerManager()
-        webbrowser.open('http://127.0.0.1:5000')
-        manager.start_server()
-        if manager.server:
-            manager.server.join()
-
 i_ocr = 0
 while i_ocr < len(ocr_sub):
     if ocr_sub[i_ocr] == "":
         del ocr_sub[i_ocr]
     else:
         i_ocr += 1
-
 
 ########################################## MAIN PART ##########################################
 
@@ -1155,13 +974,10 @@ best_subtitle = []
 while i_group < len(group):
     a = []
     b = []
-    # if group[i_group]["eng"] is not None:
     a += [group[i_group]["eng"]]
-
-    # if group[i_group]["ocr"] is not None:
     b += [group[i_group]["ocr"]]
 
-    # Check Following group xem có trùng engline hay ocr line không ?
+    # Check Following group has same line as eng or ocr  ?
     following = 1
     real_following = 1
     while True:
@@ -1221,7 +1037,7 @@ while i_group < len(group):
 
     i_group += real_following
 
-    # Chia a và b vào các trường hợp
+    # Switch case a, b in multi conditions.
     if len(a) == 0:
         for i in range(len(b)):
             try:
@@ -1251,7 +1067,7 @@ while i_group < len(group):
     elif len(a) > 1:
         best_subtitle += split_sub(a, b)
 
-# Tìm các sub from_eng, from_sub cô độc đứng cạnh nhau
+# Find any sub from_eng, from_sub line that alone (not have line respective)
 i_s = 0
 while True:
     try:
@@ -1278,7 +1094,7 @@ while True:
 
 translate = []
 
-### Transfer signs
+################# Transfer signs 
 def grouping_signs(group):
     temp_group = []
     gr = []
@@ -1306,155 +1122,133 @@ def grouping_signs(group):
     return temp_group
 
 
-if not parameter["is_transfer_sign"] and len(ocr_signs)>0:
+
+if parameter["is_use_sign_timed"] and len(eng_signs)>0:
     for sign in eng_signs:
+        if parameter["is_cmt_sign_timed"]:
+            sign.type = "Comment"
         best_subtitle += [sign]
-else:
-    if len(eng_signs)>0:
-        parameter["add_signs_timed_sub"] = True
-        def popup_page(page: ft.Page):
-            page.window.width = 350
-            page.window.height = 200
-            def close_dialog(response):
-                parameter["add_signs_timed_sub"] = response
-                page.window.close()
 
-            page.add(
-                ft.Column( controls = [
-                    ft.Text("Do you want add signs from timed sub?\n(Signs will add as comment)"),
-                    ft.Row( controls = [ ft.TextButton("Yes", on_click=lambda _: close_dialog(True) ),
-                                             ft.TextButton("No", on_click=lambda _: close_dialog(False)),
-                                        ], alignment=ft.MainAxisAlignment.CENTER ), ]) )
 
-        ft.app(target=popup_page)
-
-        if parameter["add_signs_timed_sub"]=="No" or parameter["add_signs_timed_sub"]==None:
-            pass
-        else:
-            for sign in eng_signs:
-                sign.type = "Comment"
-                best_subtitle += [sign]
+if parameter["is_use_sign_ocr"] and len(ocr_signs)>0:
 
     # Find last id in best_subtitle
     last_best_subtitle_id = max([convert_actor(ga.name)["id"] for ga in best_subtitle])
     step_id = 2
+    if not parameter["is_sync_sign_ocr"]:
+        # Add ocr_signs
+        for ocr_sign in ocr_signs:
+            ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign.name)}
+            step_id+=1
+            ocr_sign.name=convert_actor(ac)
+            best_subtitle+=[ocr_sign]
+    else:
+        from skimage.metrics import structural_similarity
+        import cv2
+        import numpy as np
+        from tqdm import tqdm
 
-    if len(ocr_signs)>0:
-        parameter["shift_signs"] = sg.popup_yes_no("Shift signs from ocr_sub feature has to compare multi frames and it will take a while.\nMake sure you choose video source instead of audio.\nDo you want to shift signs ?")
-        if parameter["shift_signs"]=="No" or parameter["shift_signs"]==None:
-            # Add ocr_signs
-            for ocr_sign in ocr_signs:
-                ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign.name)}
-                step_id+=1
-                ocr_sign.name=convert_actor(ac)
-                best_subtitle+=[ocr_sign]
-        else:
-            from skimage.metrics import structural_similarity
-            import cv2
-            import numpy as np
-            from tqdm import tqdm
+        def process_img(image1, image2):
+            image11 = cv2.resize(image1, (256,144))
+            image12 = cv2.resize(image2, (256,144))
+            image1_gray = cv2.cvtColor(image11, cv2.COLOR_BGR2GRAY)
+            image2_gray = cv2.cvtColor(image12, cv2.COLOR_BGR2GRAY)
 
-            def process_img(image1, image2):
-                image11 = cv2.resize(image1, (256,144))
-                image12 = cv2.resize(image2, (256,144))
-                image1_gray = cv2.cvtColor(image11, cv2.COLOR_BGR2GRAY)
-                image2_gray = cv2.cvtColor(image12, cv2.COLOR_BGR2GRAY)
+            # Compute SSIM between the two images, score is between 0 and 1, diff is actuall diff with all floats
+            (score, diff) = structural_similarity(image1_gray, image2_gray, full=True)
+            return score
 
-                # Compute SSIM between the two images, score is between 0 and 1, diff is actuall diff with all floats
-                (score, diff) = structural_similarity(image1_gray, image2_gray, full=True)
-                return score
+        vidcap1 = cv2.VideoCapture(parameter["origin_audio_path"])
+        vidcap2 = cv2.VideoCapture(parameter["ocr_audio_path"])
+        fps1 = vidcap1.get(cv2.CAP_PROP_FPS)
+        fps2 = vidcap2.get(cv2.CAP_PROP_FPS)
+        print("fps of 2 videos: ",fps1,fps2)
 
-            vidcap1 = cv2.VideoCapture(parameter["origin_audio_path"])
-            vidcap2 = cv2.VideoCapture(parameter["ocr_audio_path"])
-            fps1 = vidcap1.get(cv2.CAP_PROP_FPS)
-            fps2 = vidcap2.get(cv2.CAP_PROP_FPS)
-            print("fps of 2 videos: ",fps1,fps2)
+        ocr_sub_or = pysubs2.load(parameter["ocr_sub_path"])
 
-            ocr_sub_or = pysubs2.load(parameter["ocr_sub_path"])
+        ocr_signs = []
+        for i_ocr in range(len(ocr_sub_or)):
+            if any(["\\" + tag + "(" in ocr_sub_or[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
+                ocr_signs += [ocr_sub_or[i_ocr]]
+        ocr_signs = grouping_signs(ocr_signs)
+        for ocr_sign in ocr_signs:
+            frame_range = int(parameter["frame_range"])
+            sample_shift_range = int(parameter["sample_shift_range"])
 
-            ocr_signs = []
-            for i_ocr in range(len(ocr_sub_or)):
-                if any(["\\" + tag + "(" in ocr_sub_or[i_ocr].text for tag in ["pos", "move", "org", "clip"]]):
-                    ocr_signs += [ocr_sub_or[i_ocr]]
-            ocr_signs = grouping_signs(ocr_signs)
-            for ocr_sign in ocr_signs:
-                frame_range = int(parameter["frame_range"])
-                sample_shift_range = int(parameter["sample_shift_range"])
-
-                #Video1
-                start_shift_time = ocr_sign["line"].start - (sample_shift_range//2)/fps2*1000
-                if start_shift_time<0:
-                    vidcap2.set( cv2.CAP_PROP_POS_MSEC , 0 )
-                else:
-                    vidcap2.set( cv2.CAP_PROP_POS_MSEC , start_shift_time )
-                ocr_images = []
-                while True:
-                    for i in range(sample_shift_range):
-                        if  start_shift_time + i/fps2*1000 +1  < 0:
+            #Video1
+            start_shift_time = ocr_sign["line"].start - (sample_shift_range//2)/fps2*1000
+            if start_shift_time<0:
+                vidcap2.set( cv2.CAP_PROP_POS_MSEC , 0 )
+            else:
+                vidcap2.set( cv2.CAP_PROP_POS_MSEC , start_shift_time )
+            ocr_images = []
+            while True:
+                for i in range(sample_shift_range):
+                    if  start_shift_time + i/fps2*1000 +1  < 0:
+                        image = np.zeros((256, 144, 3), dtype = np.uint8)
+                    else:
+                        success,image = vidcap2.read()
+                        if not success:
                             image = np.zeros((256, 144, 3), dtype = np.uint8)
                         else:
-                            success,image = vidcap2.read()
-                            if not success:
-                                image = np.zeros((256, 144, 3), dtype = np.uint8)
-                            else:
-                               pass
-                        ocr_images += [image]
+                           pass
+                    ocr_images += [image]
 
-                    if process_img(ocr_images[0], ocr_images[-1]) > 0.8:
-                        if process_img(ocr_images[1], ocr_images[-1]) > 0.8:
-                            sample_shift_range += 4
-                            print("Sample images are too similar, extend sample_shift_range to ",sample_shift_range)
-                    else:
-                        break
-
-                # Show ocr_images for debug only
-                # for i in range(len(ocr_images)):
-                #     if i ==0:
-                #         vis = cv2.resize(ocr_images[i], (144,256)) 
-                #     else:
-                #         vis = np.concatenate((vis, cv2.resize(ocr_images[i], (144,256)) ), axis=1)
-                # vis = cv2.resize(vis, dsize=(int(sample_shift_range*256+1), 144), interpolation=cv2.INTER_CUBIC)
-                # cv2.imshow("a",vis)
-                # cv2.waitKey(0) 
-
-                while True:
-                    start_set_video1 = start_shift_time - frame_range/fps1*1000
-                    if start_set_video1<0:
-                        vidcap1.set( cv2.CAP_PROP_POS_MSEC  , 0 )
-                    else:
-                        vidcap1.set( cv2.CAP_PROP_POS_MSEC  , start_set_video1 )
-                    database_score = [[] for i in range(sample_shift_range)]
-                    for frame_number in tqdm(range(0-frame_range,frame_range)):
-                        # print(vidcap1.get(cv2.CAP_PROP_POS_MSEC) )
-                        if  start_shift_time + (0+frame_number)/fps1*1000 +1 < 0:
-                            image1 = np.zeros((256, 144, 3), dtype = np.uint8)
-                        else:
-                            success,image1 = vidcap1.read()
-                            if not success:
-                                image1 = np.zeros((256, 144, 3), dtype = np.uint8)
-                            else:
-                               pass
-                        for i in range(len(database_score)):
-                            database_score[i] += [process_img(image1, ocr_images[i])]
-
-                    compare_database = [sum([ database_score[t][g+t] for t in range(sample_shift_range)]) for g in range(len(database_score[0])-sample_shift_range)]
-                    temp_compare_database = max(compare_database)
-                    if temp_compare_database < sample_shift_range* 0.8:
-                        frame_range += 50
-                        print("Result are sus, extend frame_range to ",frame_range)
-                        continue
-                    else:
-                        compare_database = compare_database.index(temp_compare_database) - frame_range
-                    print("Shift group '", re.sub(r"\{.+\}","", ocr_sign["group"][0].text ) , "' " ,compare_database, "frames")
+                if process_img(ocr_images[0], ocr_images[-1]) > 0.8:
+                    if process_img(ocr_images[1], ocr_images[-1]) > 0.8:
+                        sample_shift_range += 4
+                        print("Sample images are too similar, extend sample_shift_range to ",sample_shift_range)
+                else:
                     break
 
-                #Shift time, change actor name
-                for ocr_sign_el in ocr_sign["group"]:
-                    ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign_el.name)}
-                    step_id+=1
-                    ocr_sign_el.name=convert_actor(ac)
-                    ocr_sign_el.shift(frames=compare_database,fps=fps1)
-                    best_subtitle+=[ocr_sign_el]
+            # Show ocr_images for debug only
+            # for i in range(len(ocr_images)):
+            #     if i ==0:
+            #         vis = cv2.resize(ocr_images[i], (144,256)) 
+            #     else:
+            #         vis = np.concatenate((vis, cv2.resize(ocr_images[i], (144,256)) ), axis=1)
+            # vis = cv2.resize(vis, dsize=(int(sample_shift_range*256+1), 144), interpolation=cv2.INTER_CUBIC)
+            # cv2.imshow("a",vis)
+            # cv2.waitKey(0) 
+
+            while True:
+                start_set_video1 = start_shift_time - frame_range/fps1*1000
+                if start_set_video1<0:
+                    vidcap1.set( cv2.CAP_PROP_POS_MSEC  , 0 )
+                else:
+                    vidcap1.set( cv2.CAP_PROP_POS_MSEC  , start_set_video1 )
+                database_score = [[] for i in range(sample_shift_range)]
+                for frame_number in tqdm(range(0-frame_range,frame_range)):
+                    # print(vidcap1.get(cv2.CAP_PROP_POS_MSEC) )
+                    if  start_shift_time + (0+frame_number)/fps1*1000 +1 < 0:
+                        image1 = np.zeros((256, 144, 3), dtype = np.uint8)
+                    else:
+                        success,image1 = vidcap1.read()
+                        if not success:
+                            image1 = np.zeros((256, 144, 3), dtype = np.uint8)
+                        else:
+                           pass
+                    for i in range(len(database_score)):
+                        database_score[i] += [process_img(image1, ocr_images[i])]
+
+                compare_database = [sum([ database_score[t][g+t] for t in range(sample_shift_range)]) for g in range(len(database_score[0])-sample_shift_range)]
+                temp_compare_database = max(compare_database)
+                if temp_compare_database < sample_shift_range* 0.8:
+                    frame_range += 50
+                    print("Result are sus, extend frame_range to ",frame_range)
+                    continue
+                else:
+                    compare_database = compare_database.index(temp_compare_database) - frame_range
+                print("Shift group '", re.sub(r"\{.+\}","", ocr_sign["group"][0].text ) , "' " ,compare_database, "frames")
+                break
+
+            #Shift time, change actor name
+            for ocr_sign_el in ocr_sign["group"]:
+                ac = {"id":last_best_subtitle_id+step_id/10000, "tag":"sign","oldname":str(ocr_sign_el.name)}
+                step_id+=1
+                ocr_sign_el.name=convert_actor(ac)
+                ocr_sign_el.shift(frames=compare_database,fps=fps1)
+                best_subtitle+=[ocr_sign_el]
 
 
 

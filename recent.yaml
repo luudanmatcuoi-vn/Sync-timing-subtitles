@@ -1,7 +1,7 @@
-origin_sub_path: 
-ocr_sub_path: 
-origin_audio_path: 
-ocr_audio_path: 
+origin_sub_path: ''
+ocr_sub_path: ''
+origin_audio_path: ''
+ocr_audio_path: ''
 same_rate: 0.5
 distance_string_rate: 0.8
 distance_string_character: 2.0
@@ -12,14 +12,15 @@ apply_mode: comment
 comment_timed_sub: true
 comment_ocr_sub: true
 quit_split_line_section: false
-is_using_sushi: false
-is_spell_checker: false
-is_remove_tag: false
-is_transfer_sign: true
+is_using_sushi: true
+is_use_sign_timed: true
+is_cmt_sign_timed: true
+is_use_sign_ocr: true
+is_cmt_sign_ocr: true
+is_sync_sign_ocr: false
 frame_range: 150.0
 sample_shift_range: 5.0
-trans_sign: false
-output_filename: output.ass
+output_filename: outpuat.ass
 punctuation: '].!?;,-'
 color: red__blue__yellow__purple
 ass_sign_tags: pos__move__org__clip__t
