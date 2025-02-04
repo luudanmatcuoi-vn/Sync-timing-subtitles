@@ -1,5 +1,4 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+# This workflow will install Python dependencies, pyinstaller and upload files
 
 name: Python application
 
@@ -23,4 +22,4 @@ jobs:
           spec: 'Sync timing subtitles.py'
           requirements: 'requirements.txt'
           upload_exe_with_name: 'Sync timing subtitles'
-          options: --onefile, --name "Sync timing subtitles", --windowed, 
+          options: --onefile, --name "Sync timing subtitles --icon=dango.ico --version-file=version.txt", --windowed, 
