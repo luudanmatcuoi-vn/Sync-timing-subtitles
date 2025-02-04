@@ -22,4 +22,5 @@ jobs:
           python_ver: '3.10'
           spec: 'Sync timing subtitles.py'
           requirements: 'requirements.txt'
+          upload_exe_with_name: 'Sync timing subtitles'
           options: --onefile, --name "Sync timing subtitles", --windowed, 
