@@ -22,4 +22,4 @@ jobs:
           spec: 'Sync timing subtitles.py'
           requirements: 'requirements.txt'
           upload_exe_with_name: 'Sync timing subtitles'
-          options: --onefile, --name "Sync timing subtitles" --icon=dango.ico --version-file=version.txt, --windowed, 
+          options: --onefile, --name 'Sync timing subtitles' --icon=dango.ico --version-file=version.txt, --windowed, 
