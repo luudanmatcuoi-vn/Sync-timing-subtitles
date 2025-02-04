@@ -2,6 +2,7 @@ Requests
 setuptools
 pysubs2
 flet
+sushi-sub
 scikit-image
 opencv-python
 textdistance
