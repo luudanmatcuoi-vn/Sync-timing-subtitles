@@ -11,7 +11,6 @@ import flet as ft
 from flet_core.control_event import ControlEvent
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
-sys.stdout.reconfigure(encoding='utf-8')
 
 try:
     req = requests.get("https://gist.github.com/luudanmatcuoi-vn/208833abf603e417efe1e6ccbb1be4f3")
@@ -893,7 +892,9 @@ while i_ocr < len(ocr_sub):
         r"[^0-9a-zA-Z\s\W%s]" % list_characters,
         ocr_sub[i_ocr].text)
     if len(match) > 0 and "OCR_EMPTY_RESULT" not in ocr_sub[i_ocr].text and is_remove_lines_unexpected :
-        print("Caution unexpected characters:\t" + " ".join(match) + "\t" + ocr_sub[i_ocr].text)
+        temp_print = "Caution unexpected characters:\t" + " ".join(match) + "\t" + ocr_sub[i_ocr].text
+        sys.stdout.buffer.write(temp_print.encode("utf-8"))
+        # print("Caution unexpected characters:\t" + " ".join(match) + "\t" + ocr_sub[i_ocr].text)
 
     # Remove lines got 60-90% unexpected characters. or line is_comment
     tempa = ocr_sub[i_ocr].text.split("\\N")
@@ -1219,7 +1220,6 @@ if parameter["is_use_sign_ocr"] and len(ocr_signs)>0:
                     vidcap1.set( cv2.CAP_PROP_POS_MSEC  , start_set_video1 )
                 database_score = [[] for i in range(sample_shift_range)]
                 for frame_number in tqdm(range(0-frame_range,frame_range)):
-                    # print(vidcap1.get(cv2.CAP_PROP_POS_MSEC) )
                     if  start_shift_time + (0+frame_number)/fps1*1000 +1 < 0:
                         image1 = np.zeros((256, 144, 3), dtype = np.uint8)
                     else:
