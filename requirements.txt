@@ -2,6 +2,7 @@ Requests
 setuptools
 pysubs2
 flet
+flet-core
 sushi-sub
 scikit-image
 opencv-python
