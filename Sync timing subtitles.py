@@ -398,7 +398,7 @@ if run_mode:
     ft.app(target = main_window)
     if "quit" in globals():
         if quit:
-            exit()
+            sys.exit()
 
 def split_line(stri):
     # remove \N ở đầu câu

@@ -1,7 +1,7 @@
 Requests
 setuptools
 pysubs2
-flet==0.25.2
+flet[all]==0.25.2
 flet-core
 sushi-sub
 scikit-image
