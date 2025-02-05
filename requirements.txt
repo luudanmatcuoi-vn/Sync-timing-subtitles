@@ -2,7 +2,8 @@ Requests
 setuptools
 pysubs2
 flet[all]==0.25.2
-flet-core
+flet-desktop==0.25.2
+flet-core==0.24.1
 sushi-sub
 scikit-image
 opencv-python

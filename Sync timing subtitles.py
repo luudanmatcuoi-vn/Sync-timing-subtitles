@@ -2,10 +2,11 @@
 # yt link   : https://www.youtube.com/channel/UCdyAb9TAX1qQ5R2-c91-x8g
 # GitHub link  : https://github.com/luudanmatcuoi-vn
 
-import sys, re, argparse, requests
+import re, argparse, requests
 import sushi, yaml, pysubs2, textdistance
 from colour import Color
-from os import system, remove
+from sys import exit
+from os import remove
 from os.path import isfile, join, splitext
 import flet as ft
 from flet_core.control_event import ControlEvent
@@ -18,10 +19,10 @@ try:
         pass
     else:
         input("Too old to work :v Pls update...")
-        sys.exit()
+        exit()
 except:
     print("Connect internet pls :3")
-    sys.exit()
+    exit()
 
 with open("default.yaml", encoding="utf-8") as f:
     default_config = yaml.load(f, Loader=yaml.FullLoader)
@@ -172,8 +173,8 @@ def main_window(page: ft.Page):
 
     def handle_window_event(e):
         if e.data == "close":
-            global quit
-            quit = True
+            global is_quit
+            is_quit = True
             page.window.prevent_close = False
             page.window.close()
 
@@ -250,8 +251,8 @@ def main_window(page: ft.Page):
             page.window.close()
 
     def on_quit(e):
-        global quit
-        quit = True
+        global is_quit
+        is_quit = True
         page.window.prevent_close = False
         page.window.close()
 
@@ -391,14 +392,13 @@ def main_window(page: ft.Page):
         padding=ft.padding.all(10),
         expand=True
     )
-
     page.add(content)
 
 if run_mode:
+    is_quit = False
     ft.app(target = main_window)
-    if "quit" in globals():
-        if quit:
-            sys.exit()
+    if is_quit==True:
+        exit()
 
 def split_line(stri):
     # remove \N ở đầu câu
@@ -893,7 +893,8 @@ while i_ocr < len(ocr_sub):
         ocr_sub[i_ocr].text)
     if len(match) > 0 and "OCR_EMPTY_RESULT" not in ocr_sub[i_ocr].text and is_remove_lines_unexpected :
         temp_print = "Caution unexpected characters:\t" + " ".join(match) + "\t" + ocr_sub[i_ocr].text
-        sys.stdout.buffer.write(temp_print.encode("utf-8"))
+        utf8stdout = open(1, 'w', encoding='utf-8', closefd=False)
+        print(temp_print, file=utf8stdout)
         # print("Caution unexpected characters:\t" + " ".join(match) + "\t" + ocr_sub[i_ocr].text)
 
     # Remove lines got 60-90% unexpected characters. or line is_comment
@@ -1290,12 +1291,4 @@ for b in best_subtitle:
 write_sub.save(parameter["output_filename"])
 
 print("DONE :v")
-
-# window.close()
-# system("pause")
-
-
-
-
-
 
