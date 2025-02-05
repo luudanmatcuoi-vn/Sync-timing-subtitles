@@ -5,7 +5,7 @@
 <br> This tool calculates same time between 2 lines and link them.
   
 ## Usages
-- Change parameters `characters`,`Dictionaries` in config.ini
+- Change parameters `characters` in config.ini
 - Can make your own SymSpell dictionary
 - Run it
 
@@ -14,8 +14,6 @@
 - Auto-detect subtitles need combining or splitting
 - Find and print caution unexpected characters (eg. japanese in ocr sub)
 - Remove ocr lines got > 60% characters not in `characters` config.ini
-- Spell checker using SymSpell
-- Add ename dictionary to check names, locations
 - Add filter rules to fix common error ( can use many methods ):
   + Replace
   + Regular expression
@@ -25,6 +23,9 @@
 - Install Python
 - run cmd `pip install -r requirements.txt`
 - Build using pyinstaller
+
+## For Dev
+![UWU](/diagram.png?raw=true "Diagram")
 
 Have fun
 
