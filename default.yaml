@@ -12,6 +12,7 @@ apply_mode: comment
 comment_timed_sub: true
 comment_ocr_sub: true
 quit_split_line_section: false
+custom_shift: 0
 is_using_sushi: true
 is_use_sign_timed: true
 is_cmt_sign_timed: true
@@ -22,9 +23,10 @@ frame_range: 150
 sample_shift_range: 5
 output_filename: output.ass
 punctuation: '].!?;,-'
-color: red__purple__blue__yellow__green
+is_create_map_only: false
+color: green__blue__red__purple__orange__yellow
 ass_sign_tags: pos__move__org__clip__t
-characters: "đóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵĐÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÁÀẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÊẾỀỂỄỆÉÈẺẼẸÚÙỦŨỤƯỨỪỬỮỰÍÌỈĨỊÝỲỶỸỴ"
+characters: "đóòỏõọôốồổỗộơớờởỡợáàảãạâấầẩẫậăắằẳẵặêếềểễệéèẻẽẹúùủũụưứừửữựíìỉĩịýỳỷỹỵĐÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÁÀẢÃẠÂẤẦẨẪẬĂẮẰẲẴẶÊẾỀỂỄỆÉÈẺẼẸÚÙỦŨỤƯỨỪỬỮỰÍÌỈĨỊÝỲỶỸỴ-"
 
 Tooltip:
   origin_sub_path: "Location of timed subtitle."

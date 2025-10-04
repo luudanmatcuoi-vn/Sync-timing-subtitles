@@ -1,9 +1,8 @@
 Requests
 setuptools
 pysubs2
-flet[all]==0.25.2
-flet-desktop==0.25.2
-flet-core==0.24.1
+flet
+flet-desktop
 sushi-sub
 scikit-image
 opencv-python
@@ -11,3 +10,6 @@ textdistance
 colour
 tqdm
 PyYAML
+pyvi
+imagehash
+flask

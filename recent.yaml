@@ -12,6 +12,7 @@ apply_mode: comment
 comment_timed_sub: true
 comment_ocr_sub: true
 quit_split_line_section: false
+custom_shift: 0.0
 is_using_sushi: true
 is_use_sign_timed: true
 is_cmt_sign_timed: true
@@ -22,7 +23,8 @@ frame_range: 150.0
 sample_shift_range: 5.0
 output_filename: outpuat.ass
 punctuation: '].!?;,-'
-color: red__blue__yellow__purple
+is_create_map_only: false
+color: green__blue__red__purple__orange__yellow
 ass_sign_tags: pos__move__org__clip__t
 characters: "\u0111\xF3\xF2\u1ECF\xF5\u1ECD\xF4\u1ED1\u1ED3\u1ED5\u1ED7\u1ED9\u01A1\
   \u1EDB\u1EDD\u1EDF\u1EE1\u1EE3\xE1\xE0\u1EA3\xE3\u1EA1\xE2\u1EA5\u1EA7\u1EA9\u1EAB\
